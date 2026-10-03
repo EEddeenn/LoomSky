@@ -58,6 +58,48 @@ commands; this does not need UHD. [Quick start](docs/guide/quick-start.md)
 takes the supplied Pharos example files through Library, preview and
 transmission review.
 
+## Deploy the protected web page
+
+`.github/workflows/deploy.yml` builds and deploys the page to the `loomsky`
+Cloudflare Worker on pushes to `main` or by a manual workflow run. It checks
+out the Pharos commit pinned in `build.zig.zon`, builds only Zig's `web` step
+(no UHD needed), runs the Next.js static export, then deploys `web/out` with
+Wrangler. The TypeScript Worker in `web/worker.ts` checks Login before
+serving HTML, JavaScript, WASM, schemas, or any other asset. It uses
+`loomsky.panel.mirairesearch.com` and preserves the page routes in
+`web/serve.ts`.
+
+Before the first workflow run, create a Worker named `loomsky` in the same
+Cloudflare account as `login` and attach the exact custom domain
+`loomsky.panel.mirairesearch.com` yourself. The workflow keeps that domain
+unchanged. The first Actions deployment then replaces the placeholder script
+with the protected TypeScript Worker and static assets.
+
+Set these **LoomSky repository Actions secrets** before the first run:
+
+| Secret | Value |
+|---|---|
+| `PHAROS_DEPLOY_KEY` | Private half of a dedicated SSH deploy key. Add its public half to the private Pharos repository under **Settings → Deploy keys**, without write access. |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare account-owned token with Workers `Editor` scoped to the existing `loomsky` Worker. No zone route permission is needed while the custom domain remains unchanged. |
+| `CLOUDFLARE_ACCOUNT_ID` | Account ID of the Cloudflare account holding the `login` Worker and `mirairesearch.com` zone. |
+
+Add the secrets in LoomSky's **Settings → Secrets and variables → Actions**.
+Do not commit private keys or tokens. The `LOGIN` service binding and
+`ASSETS` binding are declared in `wrangler.jsonc`; the deployment token does
+not replace the separate Pharos repository key.
+
+In the login Worker's production `ALLOWED_RETURN_ORIGINS`, append
+`https://loomsky.panel.mirairesearch.com` while retaining the existing Panel
+origin. In the native radio host's `host.json`, add the same origin to
+`origins` and restart the host. An HTTPS page connecting directly to an HTTP
+radio host may still be blocked by browser mixed-content rules; check that
+connection separately before relying on it in production.
+
+After deployment, an unauthenticated page visit should redirect to Login,
+and a direct request for `/pharos_traj.wasm` should return 401. A signed-in
+visit to `/library` should load the workbench. No Cloudflare Git-connected
+build is needed for this repository because GitHub Actions deploys it.
+
 ## Documentation
 
 | Part | Content |

@@ -1,0 +1,93 @@
+name: Deploy web to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loomsky-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out LoomSky
+        uses: actions/checkout@v7
+        with:
+          path: LoomSky
+          persist-credentials: false
+
+      - name: Read pinned Pharos revision
+        id: pharos
+        shell: bash
+        run: |
+          ref="$(sed -nE 's|^[[:space:]]*\.url = "git\+https://github\.com/Mirai-Research/Pharos\.git#([0-9a-f]{40})",$|\1|p' LoomSky/build.zig.zon)"
+          if [[ ! "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Expected one 40-character Pharos commit in LoomSky/build.zig.zon' >&2
+            exit 1
+          fi
+          echo "sha=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check out pinned Pharos
+        uses: actions/checkout@v7
+        with:
+          repository: Mirai-Research/Pharos
+          ref: ${{ steps.pharos.outputs.sha }}
+          path: Pharos
+          ssh-key: ${{ secrets.PHAROS_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Verify Pharos revision
+        shell: bash
+        run: test "$(git -C Pharos rev-parse HEAD)" = '${{ steps.pharos.outputs.sha }}'
+
+      - name: Install Zig 0.16.0
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/zig-x86_64-linux-0.16.0.tar.xz"
+          curl --fail --location --show-error --silent --retry 3 \
+            'https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz' \
+            --output "$archive"
+          printf '%s  %s\n' \
+            '70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00' \
+            "$archive" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/zig"
+          tar -xJf "$archive" -C "$RUNNER_TEMP/zig" --strip-components=1
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Build Pharos web products
+        working-directory: LoomSky
+        run: zig build web --fork=../Pharos
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Build static web app
+        working-directory: LoomSky/web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Verify static output
+        working-directory: LoomSky
+        run: |
+          test -s web/out/index.html
+          test -s web/out/pharos_traj.wasm
+          test -s web/out/pharos_pack.wasm
+          test -s web/out/pharos_obs.wasm
+
+      - name: Deploy Cloudflare Worker
+        working-directory: LoomSky
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.147.0 deploy --config wrangler.jsonc

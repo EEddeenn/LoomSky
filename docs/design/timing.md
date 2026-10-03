@@ -49,6 +49,11 @@ and consumption happen under the control mutex; generation and device
 calls happen outside it. A short final pull uses only the filled part
 of its slot.
 
+The ring lead is separate from UHD's transmit transport buffers.
+Increasing transport capacity can also increase the samples queued ahead
+of air time, command latency and the time needed to drain a stopped
+burst. The host file defines the [B200 transport defaults](../guide/host.md#station).
+
 ## The clock
 
 Each transmission sets the radio clock after tuning. Tuning can change

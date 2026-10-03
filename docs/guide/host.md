@@ -50,9 +50,27 @@ supply random bytes.
 | `station.bands_hz` | allowed signal bands, each `[low, high]` in Hz |
 | `station.max_gain_db` | the maximum requested and read-back transmit gain, in dB |
 
-UHD receives the `device` string as written. Device-specific master
-clock or transport settings belong in that string. The service uses one
-transmit channel.
+Device-specific master clock and transport settings belong in the
+`device` string. The service uses one transmit channel.
+
+When the string explicitly selects `type=b200`, LoomSky supplies missing
+transmit transport settings at device creation:
+
+| Setting | Default |
+|---|---|
+| `send_frame_size` | `16384` bytes |
+| `num_send_frames` | `512` |
+
+Existing arguments and explicit values are preserved. For example,
+`type=b200,serial=123456,num_send_frames=128` keeps that serial and frame
+count, and adds only `send_frame_size=16384`. Other device types and
+automatic discovery without `type=b200` receive no added settings.
+
+Together the defaults request an 8 MiB host USB transmit buffer pool.
+With one `sc16` channel at 10.24 MS/s, that is about 205 ms of samples
+before transport overhead. Actual queued samples and tolerance of host
+delays depend on sample production and the transport. This pool is
+separate from the service's [200 ms sample ring](../design/timing.md#the-lead).
 
 A bundle's full sampled band must fit inside one listed band:
 
@@ -94,3 +112,7 @@ The file may be at most 1 MiB. A read or parse failure stops startup
 with exit 2; [Install](install.md#limits-and-messages) lists the complete
 stderr lines. Settings that require the radio, such as channel support
 or a requested sample rate, are checked when the device is used.
+
+When B200 transport defaults are added, the expanded device string may
+contain at most 4095 bytes. Exceeding this limit fails device opening
+with `uhd_usrp_make: device arguments exceed 4095 bytes after adding B200 transport defaults`.

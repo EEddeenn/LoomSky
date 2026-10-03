@@ -22,7 +22,12 @@ pub const Uhd = struct {
 
     pub fn open(self: *Uhd, station: *const Station) error{ Absent, Device }!void {
         self.reference = station.reference;
-        const made = c.uhd_usrp_make(&self.usrp, station.device.ptr);
+        var buffer: [4096]u8 = undefined;
+        const args = deviceArgs(&buffer, station.device) catch {
+            self.keep("uhd_usrp_make: device arguments exceed 4095 bytes after adding B200 transport defaults");
+            return error.Device;
+        };
+        const made = c.uhd_usrp_make(&self.usrp, args.ptr);
         if (made != c.UHD_ERROR_NONE) {
             self.note("uhd_usrp_make", .global);
             self.usrp = null;
@@ -210,3 +215,26 @@ pub const Uhd = struct {
         self.text_len = message.len;
     }
 };
+
+fn deviceArgs(buffer: []u8, original: [:0]const u8) error{NoSpaceLeft}![:0]const u8 {
+    var b200 = false;
+    var frame_size = false;
+    var frames = false;
+    var pairs = std.mem.splitScalar(u8, original, ',');
+    while (pairs.next()) |pair| {
+        const equal = std.mem.indexOfScalar(u8, pair, '=') orelse pair.len;
+        const key = std.mem.trim(u8, pair[0..equal], &std.ascii.whitespace);
+        const value = std.mem.trim(u8, if (equal < pair.len) pair[equal + 1 ..] else "", &std.ascii.whitespace);
+        if (std.mem.eql(u8, key, "type")) b200 = std.mem.eql(u8, value, "b200");
+        if (std.mem.eql(u8, key, "send_frame_size")) frame_size = true;
+        if (std.mem.eql(u8, key, "num_send_frames")) frames = true;
+    }
+    if (!b200 or (frame_size and frames)) return original;
+
+    // B200 creates its USB transport at device initialization, before the stream.
+    return std.fmt.bufPrintSentinel(buffer, "{s}{s}{s}", .{
+        original,
+        if (frame_size) "" else ",send_frame_size=16384",
+        if (frames) "" else ",num_send_frames=512",
+    }, 0);
+}

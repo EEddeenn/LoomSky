@@ -17,7 +17,7 @@ export async function loadResourceHeads(kind?: ResourceKind): Promise<ResourceHe
     .map(freezeContent);
 }
 
-export function savedResource(head: ResourceHead, version: SavedVersion | undefined): SavedResource {
+function savedResource(head: ResourceHead, version: SavedVersion | undefined): SavedResource {
   if (version !== undefined && version.resourceId === head.id && version.id === head.headVersionId && version.number === head.headVersionNumber) {
     if (head.kind === "scenario" && version.kind === "scenario") return freezeContent({ head, version });
     if (head.kind === "trajectory" && version.kind === "trajectory") return freezeContent({ head, version });
@@ -31,7 +31,7 @@ export async function getSavedVersion(id: string): Promise<SavedVersion | undefi
 }
 
 export async function loadSavedVersions(resourceId: string): Promise<SavedVersion[]> {
-  const versions: SavedVersion[] = await request("savedVersions", "readonly", (store) => store.index("resourceId").getAll(resourceId));
+  const versions: SavedVersion[] = await request("savedVersions", (store) => store.index("resourceId").getAll(resourceId));
   return versions.toSorted((left, right) => right.number - left.number).map(freezeContent);
 }
 
@@ -197,7 +197,7 @@ export async function getBuildRecord(id: string): Promise<BuildRecord | undefine
 
 export async function loadBuildRecords(versionId?: string): Promise<BuildRecord[]> {
   const builds: BuildRecord[] = versionId === undefined ? await all("builds")
-    : await request("builds", "readonly", (store) => store.index("versionId").getAll(versionId));
+    : await request("builds", (store) => store.index("versionId").getAll(versionId));
   return builds.toSorted((left, right) => right.created - left.created).map(freezeContent);
 }
 

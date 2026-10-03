@@ -2,11 +2,11 @@ import { gpsClock } from "@/model/gnss";
 import { group, offset } from "@/core";
 import { announce, log, toast } from "@/workbench/feedback";
 import { getRunKnowledge, getSubmission, onStorageChanges } from "@/io/storage";
-import { startRunHistory } from "./history";
+import { startRunHistory } from "./history/writer";
 import { activateHostLifecycle, persistRecovery, reconcile, recover, service } from "./lifecycle";
 import { activityOf, changed, hostOf, hosts, nameOf, onAirSeen, rfBound, type Host } from "./state";
 import { commandWords, radioWord, uncertainty } from "./display";
-import { persistObservations, restoreHosts } from "./connection";
+import { persistObservations, restoreHosts } from "./connection/registration";
 import { startStatusPoller, type Poll } from "@/io/hosts";
 import { extendsSubmissionTruth, isLive, observationOf, sameSubmissionSource, snapshotWindow, type Snapshot } from "@/model/host";
 

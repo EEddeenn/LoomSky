@@ -18,7 +18,7 @@ export type LibraryPickerOptions = PickerOptions & {
   onUse(resources: ResourceRef[]): boolean | void | Promise<boolean | void>;
 };
 type SavedBuilds = { trajectory: SavedTrajectoryBuild; scenario: SavedScenarioBuild };
-export type SavedVersionCandidate<K extends ResourceKind = ResourceKind> = {
+type SavedVersionCandidate<K extends ResourceKind = ResourceKind> = {
   [Kind in K]: { kind: Kind; build: SavedBuilds[Kind] }
 }[K];
 export type SavedVersionPickerOptions = {

@@ -162,13 +162,20 @@ flowchart TD
 
 A multi-file owner exposes an entry beside its implementation directory:
 `workbench/documents/trajectory.ts` over `documents/trajectory/`, for
-example. Callers use that entry. Helpers and types needed only inside the
-owner stay private; the entry exports the operations its consumers need.
+example. External callers use that entry. Internal modules import their
+implementation dependencies directly instead of routing back through their
+own entry. Helpers and types needed only inside a file stay private; the entry
+exports only the operations and types its consumers need. Classes used only
+as types outside their owner have type-only exports.
 Grouping directories such as `page/shared/documents/` collect related
 owners without an umbrella export file. A resource's working copy,
 editing, saved builds and user actions have separate entries inside that
 resource's directory. Actions may coordinate other resources; a working-copy
 entry does not re-export those actions back into its own dependencies.
+Single-file owners do not need a separate forwarding file. Shared view types
+live beside their consumers, so child views do not depend on a parent component
+for type definitions. Font setup is shared directly by the app layout and map
+styles without passing through the UI control entry.
 
 ### Browser naming and style
 

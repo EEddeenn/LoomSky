@@ -79,7 +79,7 @@ or automatic checkpoints.
 |---|---|
 | `navigation/` | canonical routes, browser history, page visits, presentation memory, attention and page sessions |
 | `library/browse.ts` | Library filter, search, sort, selection, preview and scroll |
-| `library/picker.ts` | one resource or saved-version picker session, preparation and application callback |
+| `library/picker/session.ts` | one resource or saved-version picker session, preparation and application callback |
 | `documents/versions/history.ts` | saved versions/builds, loading/error state, refresh and disposal |
 | `library/imports.ts`, `documents/editing/actions.ts` | import orchestration; pending-input feedback and focus |
 | `page/shared/navigation.tsx`, `navigation/restore.ts` | native links and mounted scroll restoration |
@@ -508,7 +508,7 @@ producers back into their dependencies.
 | Loader result | Complete value returned to callers |
 |---|---|
 | `SavedTrajectoryBuild` | typed successful build record, immutable saved version, minimal version/build pin and decoded track |
-| `SavedScenarioBuild` | source version/build identity, bundle, typed summary, window, captured inputs and trajectory track |
+| `SavedScenarioBuild` | source version/build identity, bundle, typed summary, window and captured inputs; previews load the pinned trajectory through `loadScenarioBuildTrack` |
 
 The version picker lists saved versions and their content. Browsing starts
 no build. **Use** loads the explicitly selected build or builds the selected

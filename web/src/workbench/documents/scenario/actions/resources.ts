@@ -1,4 +1,5 @@
-import { openScenario, deleteScenario, newScenario, type ScenarioDoc, type NewScenario } from "@/workbench/documents/scenario";
+import { openScenario, deleteScenario, newScenario, type NewScenario } from "../collection";
+import type { ScenarioDoc } from "../document";
 import { captureAttention, hasAttention, revealDocument, type AttentionToken } from "@/workbench/navigation";
 import { reportProblem, resolveProblem } from "@/workbench/feedback";
 import { startDuplicate, startExport } from "@/workbench/operations";

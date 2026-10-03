@@ -1,6 +1,6 @@
 "use client";
 
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../display";
 import { ScrollArea } from "../scroll";
 import { DetailSection } from "./section";
 import { CommandForm } from "./run/commands/form";

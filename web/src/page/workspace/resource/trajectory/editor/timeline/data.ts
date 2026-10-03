@@ -9,7 +9,7 @@ export const quantities = [
   { key: "altitude", field: "altitude", label: "Altitude", unit: "m" },
   { key: "jerk3d", field: "jerk", label: "Jerk", unit: "m/s³" },
 ] as const;
-export type ChartQuantity = typeof quantities[number]["key"];
+type ChartQuantity = typeof quantities[number]["key"];
 export type EventMark = { id: string; time: number; estimated: boolean };
 type SectionMark = { id: string; from: number; to: number };
 

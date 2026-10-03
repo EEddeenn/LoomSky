@@ -9,9 +9,9 @@ import { Button, FeedbackIcon, Spinner } from "../ui";
 import { addedOn, PreviewFacts, PreviewHeader, PreviewList, PreviewSection, PreviewUnavailable } from "./info";
 import { CoveragePreview } from "./file/coverage";
 
-export const fileKindLabels: Record<LibraryFileKind, string> = { ephemeris: "Navigation ephemeris", almanac: "Almanac", antenna: "Antenna", "precise-orbit": "Precise orbit", "precise-clock": "Precise clock", other: "File" };
+const fileKindLabels: Record<LibraryFileKind, string> = { ephemeris: "Navigation ephemeris", almanac: "Almanac", antenna: "Antenna", "precise-orbit": "Precise orbit", "precise-clock": "Precise clock", other: "File" };
 
-export function FileFacts({ file }: { file: LibraryFileRecord }) {
+function FileFacts({ file }: { file: LibraryFileRecord }) {
   return <PreviewFacts facts={[
     ["Type", fileKindLabels[file.kind]],
     ["Extension", file.extension === "" ? "None" : `.${file.extension}`],
@@ -20,7 +20,7 @@ export function FileFacts({ file }: { file: LibraryFileRecord }) {
   ]} />;
 }
 
-export function FileUsage({ file }: { file: LibraryFileRecord }) {
+function FileUsage({ file }: { file: LibraryFileRecord }) {
   useStore(scenarioCatalog, (state) => state.version);
   const uses = libraryFileUsage(file.digest);
   return <PreviewSection title="Used by scenarios">
@@ -28,11 +28,11 @@ export function FileUsage({ file }: { file: LibraryFileRecord }) {
   </PreviewSection>;
 }
 
-export function FileDigest({ file }: { file: LibraryFileRecord }) {
+function FileDigest({ file }: { file: LibraryFileRecord }) {
   return <PreviewSection title="SHA-256"><code className="text-small text-ink3 [overflow-wrap:anywhere]">{file.digest}</code></PreviewSection>;
 }
 
-export function FileContents({ file, expanded = false }: { file: LibraryFileRecord; expanded?: boolean }) {
+function FileContents({ file, expanded = false }: { file: LibraryFileRecord; expanded?: boolean }) {
   const { reading, retry } = useFilePreview(file);
   if (reading === null) return <div role="status" className="flex items-center gap-2 text-small text-ink3"><Spinner />Reading file…</div>;
   if (reading.status === "error") return <div className="flex flex-col items-start gap-2 text-small text-fault"><span>{reading.message}</span><Button size="xs" onClick={retry}>Retry preview</Button></div>;

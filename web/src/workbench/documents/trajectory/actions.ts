@@ -1,4 +1,5 @@
-import { deleteTrajectory, newTrajectory, type TrajectoryDoc } from "@/workbench/documents/trajectory";
+import { deleteTrajectory, newTrajectory } from "./collection";
+import type { TrajectoryDoc } from "./document";
 import { captureAttention, type AttentionToken } from "@/workbench/navigation";
 import { reportProblem, resolveProblem } from "@/workbench/feedback";
 import { startDuplicate, startExport } from "@/workbench/operations";

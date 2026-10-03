@@ -1,7 +1,7 @@
 import { gpsClock } from "@/model/gnss";
 import { airsUntil } from "./control";
 import { hostOf, nameOf } from "../state";
-import { removeRegisteredHost } from "../connection";
+import { removeRegisteredHost } from "../connection/registration";
 import { log, requestConfirmation, toast } from "@/workbench/feedback";
 import { resourceRemoved } from "@/workbench/navigation";
 import { startExport } from "@/workbench/operations";

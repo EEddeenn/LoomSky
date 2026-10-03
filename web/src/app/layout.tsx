@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { condensed, mono, sans } from "@/page/shared/ui";
+import { condensed, mono, sans } from "@/page/shared/ui/fonts";
 import "./globals.css";
 
 export const metadata: Metadata = { icons: { icon: "data:," } };

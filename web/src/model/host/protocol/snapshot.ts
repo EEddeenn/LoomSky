@@ -26,7 +26,7 @@ type Plan = {
   leap_seconds_after: number;
 };
 
-export type Status = {
+type Status = {
   config: { gain_db: number; replay_ms: number | null; label: string | null };
   plan: Plan | null;
   first: number | null;

@@ -15,7 +15,6 @@ type CompiledScenario = { diagnostics: DocumentDiagnostic[]; dependency: SavedTr
     status: "success";
     engineIdentity: string;
     track: GeneratedTrack;
-    trajectoryBuild: SuccessfulTrajectoryBuild;
     bundle: Uint8Array<ArrayBuffer>;
     bundleRecord: VerifiedFileRecord;
     summary: PackedSummary;
@@ -130,7 +129,7 @@ async function packScenarioInput(prepared: ScenarioInput, options: TaskOptions):
     } else if (!diagnostics.some((diagnostic) => diagnostic.error) && trajectory !== null) {
       const bundleRecord = await captureFile(packed.bundle, options);
       return {
-        status: "success", engineIdentity, diagnostics, dependency: trajectory.dependency, track: trajectory.track, trajectoryBuild: trajectory.record, input: trajectory.input,
+        status: "success", engineIdentity, diagnostics, dependency: trajectory.dependency, track: trajectory.track, input: trajectory.input,
         bundle: bundleRecord.bytes, bundleRecord, summary: packed.summary, digest: bundleRecord.digest,
       };
     }

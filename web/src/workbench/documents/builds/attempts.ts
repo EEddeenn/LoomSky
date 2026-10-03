@@ -5,7 +5,7 @@ import type { DocumentDiagnostic } from "@/model/document";
 import { savedSnapshotDigest, type FailedBuild, type ResourceKind, type SavedVersion, type SavedVersionOf, type SuccessfulBuildOf } from "@/model/version";
 import type { BuildBytes } from "./artifacts";
 
-export class BuildFailure extends Error {
+class BuildFailure extends Error {
   constructor(readonly record: FailedBuild) {
     super(record.diagnostics.find((diagnostic) => diagnostic.error)?.message ?? "Could not build this saved version.");
     this.name = "BuildFailure";

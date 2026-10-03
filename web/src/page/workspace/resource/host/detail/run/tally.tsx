@@ -9,7 +9,7 @@ import { scenarioCatalog } from "@/workbench/documents/scenario";
 import { openProblems } from "@/workbench/feedback";
 import { openTransmit } from "@/workbench/transmit";
 import { Button, Fig, GpsTime, Icon } from "@/page/shared/ui";
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../../display";
 
 function StopKey({ host, onAir }: { host: Host; onAir: boolean }) {
   const name = nameOf(host);

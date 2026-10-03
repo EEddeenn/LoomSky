@@ -1,5 +1,5 @@
 import { stateWidth, type Track } from "./track";
-import type { Plan, PlanPoint, PlanPosition } from "./plan";
+import type { Plan, PlanPoint, PlanPosition } from "./plan/source";
 
 type Position = { lat: number; lon: number };
 const wgs84SemiMajorM = 6_378_137;

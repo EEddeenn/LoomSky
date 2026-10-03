@@ -2,7 +2,7 @@ import type { Download } from "@/core";
 import { ResourceLimitError, type ByteSink } from "@/io/compute";
 
 export type OutputFile = Download & { release(): Promise<void> };
-export type Output = ByteSink & { finish(name: string): Promise<OutputFile>; abort(): Promise<void> };
+type Output = ByteSink & { finish(name: string): Promise<OutputFile>; abort(): Promise<void> };
 const memoryLimit = 64 * 1024 * 1024;
 const directoryName = "loomsky-exports";
 const lockPrefix = "loomsky:export:";

@@ -9,7 +9,7 @@ import { openProblems } from "@/workbench/feedback";
 import { useProblem } from "@/page/shared/feedback";
 import { useViewport } from "@/page/shared/navigation";
 import { Button, Fig } from "@/page/shared/ui";
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../display";
 import { HistoricalRun } from "./history/run";
 
 export function RunHistory({ host, view }: HostDisplay) {

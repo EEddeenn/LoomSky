@@ -22,7 +22,7 @@ export function SignalsSection({ doc }: { doc: ScenarioDoc }) {
   </div>;
 }
 
-export function AllocationSection({ doc }: { doc: ScenarioDoc }) {
+function AllocationSection({ doc }: { doc: ScenarioDoc }) {
   const scenario = useStore(schemas, (s) => s.scenario);
   const signalsNode = scenario?.properties?.signals ?? null;
   const all = words(signalsNode);

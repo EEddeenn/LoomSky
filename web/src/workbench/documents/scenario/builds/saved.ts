@@ -5,7 +5,7 @@ import type { GeneratedTrack } from "@/model/trajectory";
 import { immutableCopy, type ScenarioSavedVersion, type SuccessfulBuildOf } from "@/model/version";
 import { artifactBytes, buildIdentity, createSavedBuilds, successfulBuild } from "../../builds";
 import { compileScenarioSnapshot } from "../compile";
-import { copyTrack, loadTrajectoryBuild } from "../../trajectory/builds";
+import { loadTrajectoryBuild } from "../../trajectory/builds";
 
 export type SavedScenarioBuild = Readonly<{
   versionId: string;
@@ -18,7 +18,6 @@ export type SavedScenarioBuild = Readonly<{
   window: Window;
   bundle: Uint8Array<ArrayBuffer>;
   input: ScenarioInputs;
-  track: GeneratedTrack;
 }>;
 
 export const buildScenarioVersion = createSavedBuilds<"scenario", SavedScenarioBuild>("scenario", {
@@ -37,10 +36,10 @@ export const buildScenarioVersion = createSavedBuilds<"scenario", SavedScenarioB
       artifacts: { bundle },
       summary: result.summary,
     });
-    return { record, bytes: [result.bundleRecord], value: scenarioBuild(record, version, result.bundle, result.track, result.input) };
+    return { record, bytes: [result.bundleRecord], value: scenarioBuild(record, version, result.bundle, result.input) };
   },
   load: readScenarioBuild,
-  copy: (build) => Object.freeze({ ...build, bundle: build.bundle.slice(), track: copyTrack(build.track) }),
+  copy: (build) => Object.freeze({ ...build, bundle: build.bundle.slice() }),
 });
 
 async function savedScenarioBuild(buildId: string) {
@@ -61,14 +60,14 @@ async function readScenarioBuild(record: SuccessfulBuildOf<"scenario">, version:
   const [bundle, dependency] = await Promise.all([artifactBytes(record.artifacts.bundle, options), loadTrajectoryBuild(trajectory, options)]);
   const input = immutableCopy({ scenario: version.snapshot.source.text, source: dependency.version.snapshot.source, generated: dependency.record.artifacts.pht, files: version.snapshot.bindings.files });
   options.signal?.throwIfAborted();
-  return scenarioBuild(record, version, bundle, dependency.track, input);
+  return scenarioBuild(record, version, bundle, input);
 }
 
-function scenarioBuild(record: SuccessfulBuildOf<"scenario">, version: ScenarioSavedVersion, bundle: Uint8Array<ArrayBuffer>, track: GeneratedTrack, input: ScenarioInputs): SavedScenarioBuild {
+function scenarioBuild(record: SuccessfulBuildOf<"scenario">, version: ScenarioSavedVersion, bundle: Uint8Array<ArrayBuffer>, input: ScenarioInputs): SavedScenarioBuild {
   return Object.freeze({
     versionId: version.id, versionNumber: version.number, resourceId: version.resourceId,
     buildId: record.id, engineIdentity: record.engineIdentity, digest: record.artifacts.bundle.digest,
-    summary: record.summary, window: record.summary.window, bundle, input, track,
+    summary: record.summary, window: record.summary.window, bundle, input,
   });
 }
 

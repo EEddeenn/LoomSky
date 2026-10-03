@@ -97,11 +97,6 @@ export class DocumentEditor implements TextDocument {
     if (!dispatchDocumentTransaction(this, transaction)) this.accept(transaction.state);
   }
 
-  apply(spec: TransactionSpec): void {
-    const transaction = this.prepareTransaction(spec);
-    if (transaction !== null) this.publishTransaction(transaction);
-  }
-
   accept(state: EditorState): void {
     const before = this.state();
     const changed = !before.doc.eq(state.doc) || this.owner.significant(before, state);

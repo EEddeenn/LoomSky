@@ -68,7 +68,7 @@ function isDeepRoute(pathname: string): boolean {
     /^\/resource\/(?:scenario|trajectory|host|file)\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname);
 }
 
-export async function handleRequest(request: Request, env: Env): Promise<Response> {
+async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (url.protocol !== "https:") {
     url.protocol = "https:";

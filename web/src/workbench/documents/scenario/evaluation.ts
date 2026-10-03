@@ -5,7 +5,6 @@ import { reserveInput } from "@/io/input";
 import type { Coverage } from "@/io/pharos";
 import { fileByteLength, fileBytes, getResourceHead, onStorageChanges } from "@/io/storage";
 import type { DocumentDiagnostic } from "@/model/document";
-import type { ScenarioInputs } from "@/model/scenario";
 import { scenarioFileReferences } from "@/model/scenario";
 import type { GeneratedTrack } from "@/model/trajectory";
 import type { ScenarioSnapshot } from "@/model/version";
@@ -19,7 +18,6 @@ export type ScenarioResult = Readonly<{
   window: Window;
   bundle: Uint8Array<ArrayBuffer>;
   scenario: string;
-  input: ScenarioInputs;
   track: GeneratedTrack;
 }>;
 
@@ -38,7 +36,7 @@ export class ScenarioEvaluation {
   private check: Check = { status: "checking", diagnostics: [] };
   private successful: ScenarioResult | null = null;
   private successfulSource: ScenarioRecovery["successful"] = null;
-  private recovering: { source: Source; controller: AbortController } | null = null;
+  private recovering: { controller: AbortController } | null = null;
   private track: GeneratedTrack | null = null;
   private dependency: SavedTrajectoryBuild | null = null;
   private readonly unsubscribeStorage: () => void;
@@ -120,7 +118,7 @@ export class ScenarioEvaluation {
   private async restoreSuccessful(): Promise<void> {
     const source = this.successfulSource;
     if (source === null || source.rev === this.source.rev || this.successful !== null || this.recovering !== null) return;
-    const recovering = { source, controller: new AbortController() };
+    const recovering = { controller: new AbortController() };
     this.recovering = recovering;
     try {
       const result = await compileScenarioSnapshot(source.snapshot, { priority: "interactive", signal: recovering.controller.signal }, this.dependency);
@@ -128,7 +126,7 @@ export class ScenarioEvaluation {
       if (result.engineIdentity !== source.engineIdentity) { this.successfulSource = null; return; }
       this.successful = {
         rev: source.rev, digest: result.digest, summary: result.summary, window: result.summary.window,
-        bundle: result.bundle, scenario: source.snapshot.source.text, input: result.input, track: result.track,
+        bundle: result.bundle, scenario: source.snapshot.source.text, track: result.track,
       };
       if (this.track === null) this.track = result.track;
       this.notify();
@@ -177,7 +175,7 @@ export class ScenarioEvaluation {
       if (result.status === "success") {
         const successful: ScenarioResult = {
           rev, digest: result.digest, summary: result.summary, window: result.summary.window,
-          bundle: result.bundle, scenario: snapshot.source.text, input: result.input, track: result.track,
+          bundle: result.bundle, scenario: snapshot.source.text, track: result.track,
         };
         this.successful = successful;
         this.successfulSource = { ...packing.source, engineIdentity: result.engineIdentity };

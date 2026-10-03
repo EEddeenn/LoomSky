@@ -1,6 +1,6 @@
 import { randomId } from "@/core";
 
-export type HistoryEntry = { entryId: string; path: string; readonly index: number };
+type HistoryEntry = { entryId: string; path: string; readonly index: number };
 type Visit = (entry: HistoryEntry) => string | null;
 
 let frame: HistoryEntry | null = null;

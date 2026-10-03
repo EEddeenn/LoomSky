@@ -1,6 +1,6 @@
 export {
   createPlan, planFrom, planQuantities,
-  type Plan, type PlanCurve, type PlanEvent, type PlanInitialState, type PlanPoint,
+  type Plan, type PlanCurve, type PlanEvent, type PlanInitialState,
   type PlanPosition, type PlanQuantity, type PlanRegion, type PlanRule, type PlanScope, type PlanSection,
   type PlanValue,
 } from "./plan/source";

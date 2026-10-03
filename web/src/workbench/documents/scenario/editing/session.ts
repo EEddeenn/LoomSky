@@ -2,9 +2,9 @@ import { createStore, recordOf } from "@/core";
 import { fieldReference, isJsonNumberLiteral, pathKey, type Prepared, type TextDocument, type WriteChange } from "@/model/document";
 import { lookup, type Path } from "@/model/schema";
 import { schemas } from "@/workbench/schemas";
-import { EditingSession } from "../../editing";
+import { EditingSession } from "../../editing/session";
 
-export type TableState = { selected: Set<number>; batch: string; paste: string; qualityColumn: "" | "rurai" | "udrei"; conflict: string | null };
+type TableState = { selected: Set<number>; batch: string; paste: string; qualityColumn: "" | "rurai" | "udrei"; conflict: string | null };
 type TableBaseline = { path: Path; value: string | undefined; lists: { path: Path; value: string }[] };
 type TablePatch = Partial<Pick<TableState, "selected" | "batch" | "paste" | "qualityColumn">>;
 
@@ -61,7 +61,7 @@ export class ScenarioSession extends EditingSession {
       : null;
   }
 
-  tableConflict(path: Path): string | null {
+  private tableConflict(path: Path): string | null {
     const key = pathKey("scenario", path);
     const table = this.tables.get().entries[key];
     if (table === undefined) return null;

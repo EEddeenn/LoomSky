@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { pathKey } from "@/model/document";
 import { useStore } from "@/core";
 import type { Path } from "@/model/schema";
-import type { ScenarioDoc } from "@/workbench/documents/scenario";
+import type { ScenarioDoc } from "../document";
 
 function selectionWithin(selected: Set<number>, count: number): Set<number> {
   const indices = [...selected].filter((index) => index >= 0 && index < count);

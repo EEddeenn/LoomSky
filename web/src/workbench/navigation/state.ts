@@ -10,9 +10,9 @@ export type DocumentTarget =
   | { kind: "scenario"; id: string; target: FieldTarget | { kind: "path"; path: Path } }
   | { kind: "trajectory"; id: string; target: FieldTarget | { kind: "name" } };
 export type DocumentFocus = DocumentTarget & { requestId: number; visitId: number };
-export type CommandForm = CommandDraft & { focus: number };
+type CommandForm = CommandDraft & { focus: number };
 export type ScenarioPreviewView = "map" | "sky" | "effective";
-export type ScenarioPreviewState = {
+type ScenarioPreviewState = {
   view: ScenarioPreviewView;
   visible: boolean;
   width: number;

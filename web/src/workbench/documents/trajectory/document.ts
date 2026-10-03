@@ -1,16 +1,16 @@
 import { invertedEffects, isolateHistory, undoDepth, redoDepth } from "@codemirror/commands";
 import { StateEffect, StateField } from "@codemirror/state";
-import { commitFieldInputs, prepareFieldInputs, publishFieldChanges } from "@/workbench/documents/editing";
+import { commitFieldInputs, prepareFieldInputs, publishFieldChanges } from "../editing/drafts";
 import { writeTransaction, type PendingIssue, type Prepared } from "@/model/document";
 import { createStore } from "@/core";
 import { compute } from "@/io/compute";
 import { appendSavedVersion } from "@/io/storage";
 import { resourceSummary, type ResourceHead, type SavedResource, type SavedVersion, type TrajectorySavedVersion } from "@/model/version";
-import type { GeneratedTrack, Track, TrajectorySource } from "@/model/trajectory";
+import type { GeneratedTrack, Track } from "@/model/trajectory";
 import { SavedWorkingCopy, savedHistory } from "../saved";
 import { DocumentEditor } from "../editing/session";
 import { TrajectoryEvaluation, type TrajectoryRecovery } from "./evaluation";
-import { TrajectorySession } from "./editing";
+import { TrajectorySession } from "./editing/session";
 
 const setTrajectoryName = StateEffect.define<string>();
 const trajectoryName = StateField.define<string>({
@@ -25,7 +25,6 @@ const trajectoryNameHistory = invertedEffects.of((transaction) => transaction.ef
   : []);
 export class TrajectoryDoc {
   readonly id: string;
-  readonly created: number;
   readonly kind = "trajectory";
   readonly editor: DocumentEditor;
   readonly editing: TrajectorySession;
@@ -41,7 +40,6 @@ export class TrajectoryDoc {
 
   constructor({ head, version }: SavedResource<"trajectory">) {
     this.id = head.id;
-    this.created = head.created;
     this.editor = new DocumentEditor({
       id: this.id, kind: this.kind, text: version.snapshot.source.text,
       extensions: [trajectoryName.init(() => version.snapshot.name), trajectoryNameHistory, savedHistory],
@@ -62,13 +60,12 @@ export class TrajectoryDoc {
   get workingSequence(): number { return this.sequence; }
   get changeVersion(): number { return this.changeSequence; }
   get name(): string { return this.editor.state().field(trajectoryName); }
-  get source(): TrajectorySource { return { text: this.editor.text() }; }
   get pending(): boolean { return this.editing.pending; }
   get hasUnsavedChanges(): boolean { return this.saved.dirty || this.pending; }
   get canAdoptExternal(): boolean { return !this.hasUnsavedChanges && !this.editing.busy && !this.saved.saving
     && undoDepth(this.editor.state()) === 0 && redoDepth(this.editor.state()) === 0
     && !Object.values(this.editing.get().drawingRedo).some((positions) => positions.length > 0); }
-  get workingSnapshot(): TrajectorySavedVersion["snapshot"] { return { name: this.name, source: this.source }; }
+  get workingSnapshot(): TrajectorySavedVersion["snapshot"] { return { name: this.name, source: { text: this.editor.text() } }; }
   get summary() {
     if (this.summaryCache?.rev !== this.editor.rev) this.summaryCache = { rev: this.editor.rev, value: resourceSummary(this.kind, this.workingSnapshot) };
     return this.summaryCache.value;
@@ -121,7 +118,7 @@ export class TrajectoryDoc {
     if (this.saved.version.id !== version.id) this.reloadSaved({ head, version });
   }
 
-  reloadSaved(resource: SavedResource): void {
+  private reloadSaved(resource: SavedResource): void {
     if (resource.version.kind !== "trajectory" || resource.head.kind !== "trajectory") throw new Error("Choose a saved trajectory version");
     if (this.lifetime !== "active") throw new Error("The trajectory is no longer editable");
     const snapshot = resource.version.snapshot;
@@ -137,16 +134,11 @@ export class TrajectoryDoc {
     if (name === null) return true;
     if (!this.editor.writable() || this.editing.nameIssue !== null) return false;
     this.editing.clearNameDraft();
-    if (name !== this.name) this.editor.apply({ effects: setTrajectoryName.of(name), userEvent: "input.form", annotations: isolateHistory.of("full") });
+    if (name !== this.name) {
+      const transaction = this.editor.prepareTransaction({ effects: setTrajectoryName.of(name), userEvent: "input.form", annotations: isolateHistory.of("full") });
+      if (transaction !== null) this.editor.publishTransaction(transaction);
+    }
     return true;
-  }
-
-  commitFieldInputs(): PendingIssue | null {
-    if (!this.editor.writable()) throw new Error("The trajectory is no longer editable");
-    const name = this.editing.nameDraft?.trim() ?? null;
-    const issue = this.editing.nameIssue;
-    if (issue !== null) return { kind: "name", message: issue };
-    return commitFieldInputs(this.editor, name !== null && name !== this.name ? { effects: setTrajectoryName.of(name) } : {}, () => this.editing.clearNameDraft());
   }
 
   prepareSnapshot(): PendingIssue | null {

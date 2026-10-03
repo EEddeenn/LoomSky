@@ -21,7 +21,7 @@ type Stores = {
   hosts: HostRegistrationRecord;
   basemaps: { url: string };
 };
-export type StoreName = keyof Stores;
+type StoreName = keyof Stores;
 
 const stores: Record<StoreName, string> = {
   resourceHeads: "id", savedVersions: "id", builds: "id",
@@ -37,7 +37,7 @@ let runtime = 0;
 let connectionGeneration = 0;
 let closed = false;
 
-export class StorageError extends Error {
+class StorageError extends Error {
   constructor(action: string, cause: unknown) {
     super(`Could not ${action} browser storage: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
     this.name = "StorageError";
@@ -46,14 +46,14 @@ export class StorageError extends Error {
 
 export class StorageConflictError extends Error {}
 
-export class StorageUnavailableError extends Error {
+class StorageUnavailableError extends Error {
   constructor() {
     super("Browser storage changed in another tab. Reload to continue.");
     this.name = "StorageUnavailableError";
   }
 }
 
-export class StorageClosedError extends Error {
+class StorageClosedError extends Error {
   constructor() {
     super("The workbench storage session is closed.");
     this.name = "StorageClosedError";
@@ -195,18 +195,14 @@ export function readTransaction<T>(names: StoreName[], start: (transaction: IDBT
   return transact(names, "readonly", `read ${names.join(", ")} in`, start);
 }
 
-export function privateTransaction<T>(names: StoreName[], action: string, start: (transaction: IDBTransaction, fail: (error: unknown) => void) => () => T, signal?: AbortSignal): Promise<T> {
-  return transact(names, "readwrite", action, start, signal);
-}
-
 export async function commitTransaction<T>(names: StoreName[], action: string, start: (transaction: IDBTransaction, fail: (error: unknown) => void, changed: (change: StorageChange) => void) => () => T, signal?: AbortSignal): Promise<T> {
   let change: StorageChange | undefined;
-  const result = await privateTransaction(names, action, (transaction, fail) => start(transaction, fail, (next) => { change = next; }), signal);
+  const result = await transact(names, "readwrite", action, (transaction, fail) => start(transaction, fail, (next) => { change = next; }), signal);
   if (change !== undefined) notify(commitListeners, change);
   return result;
 }
 
-export function request<T>(name: StoreName, _mode: "readonly", make: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+export function request<T>(name: StoreName, make: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return readTransaction([name], (transaction) => {
     const pending = make(transaction.objectStore(name));
     return () => pending.result;
@@ -214,9 +210,9 @@ export function request<T>(name: StoreName, _mode: "readonly", make: (store: IDB
 }
 
 export function all<N extends StoreName>(name: N): Promise<Stores[N][]> {
-  return request(name, "readonly", (store) => store.getAll());
+  return request(name, (store) => store.getAll());
 }
 
 export function get<N extends StoreName>(name: N, key: string): Promise<Stores[N] | undefined> {
-  return request(name, "readonly", (store) => store.get(key));
+  return request(name, (store) => store.get(key));
 }

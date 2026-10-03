@@ -1,5 +1,5 @@
 export { compute, startCompute } from "./compute/client";
-export { createDemand, priorityOf, type ComputeDemand, type Priority, type PrioritySource } from "./compute/demand";
+export { createDemand, type ComputeDemand } from "./compute/demand";
 export { ComputeError } from "./compute/pool";
 export { ResourceLimitError } from "./compute/limits";
-export type { BundleSource, ByteSink, Lane, NamedInput, TaskOptions, ZipEntry } from "./compute/protocol";
+export type { ByteSink, NamedInput, TaskOptions, ZipEntry } from "./compute/protocol";

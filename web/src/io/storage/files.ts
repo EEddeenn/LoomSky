@@ -5,7 +5,7 @@ import { freezeContent } from "@/model/version";
 import { all, commitTransaction, get, readTransaction, StorageConflictError, type FileRecord, type VerifiedFileRecord } from "./database";
 import type { ResourceWriteOptions } from "./versions";
 
-export class FileConflictError extends StorageConflictError {
+class FileConflictError extends StorageConflictError {
   constructor(readonly expectedRevision: number, readonly actual: LibraryFileRecord | null) {
     super(actual === null ? "The file was removed in another tab." : "This file changed in another tab. Review its name and retry.");
     this.name = "FileConflictError";

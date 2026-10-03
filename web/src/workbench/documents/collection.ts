@@ -3,7 +3,7 @@ import { deleteResource, getResourceHead, getSavedVersion, loadResourceHeads, on
 import type { SaveState } from "@/model/document";
 import { type ResourceHead, type ResourceKind, type ResourceSummary, type SavedResource, type SavedVersion } from "@/model/version";
 
-export type DocumentWorkingSummary = Readonly<{ summary: ResourceSummary; dirty: boolean; pending: boolean; saveState: SaveState }>;
+type DocumentWorkingSummary = Readonly<{ summary: ResourceSummary; dirty: boolean; pending: boolean; saveState: SaveState }>;
 export type DocumentCatalogEntry = Readonly<{ head: ResourceHead; working: DocumentWorkingSummary | null }>;
 export class DocumentMissingError extends Error {}
 

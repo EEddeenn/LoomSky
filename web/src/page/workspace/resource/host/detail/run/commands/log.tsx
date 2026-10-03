@@ -1,7 +1,7 @@
 "use client";
 
 import { commandWords } from "@/workbench/hosts";
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../../../display";
 import { gpsClock, utcClock } from "@/model/gnss";
 import { openProblems } from "@/workbench/feedback";
 import { Button, Fig, Icon } from "@/page/shared/ui";

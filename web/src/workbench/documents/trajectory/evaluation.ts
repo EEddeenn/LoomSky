@@ -44,7 +44,7 @@ export class TrajectoryEvaluation {
   private generationTimer: ReturnType<typeof setTimeout> | null = null;
   private evaluating = false;
   private successfulSource: TrajectoryRecovery["successful"] = null;
-  private recovering: { source: NonNullable<TrajectoryRecovery["successful"]>; solve: Solve } | null = null;
+  private recovering: { solve: Solve } | null = null;
 
   constructor(private readonly source: Source, private readonly notify: () => void) {}
 
@@ -66,7 +66,6 @@ export class TrajectoryEvaluation {
   get shape(): Track | null {
     return this.currentShape ?? (this.generation.status === "ready" ? this.generation.track : this.generation.ghost);
   }
-  get previewStatus(): "idle" | "checking" | "ready" | "errors" { return this.previewState.status; }
   get previewDiagnostics(): readonly DocumentDiagnostic[] { return this.previewState.diagnostics; }
   get previewTrack(): Track | null {
     return this.previewState.status === "ready" || this.previewState.status === "errors" ? this.previewState.track : null;
@@ -105,7 +104,7 @@ export class TrajectoryEvaluation {
   private async restoreSuccessful(): Promise<void> {
     const source = this.successfulSource;
     if (source === null || source.rev === this.source.revision() || this.shape !== null || this.recovering !== null) return;
-    const recovering = { source, solve: this.solve(source.text, "interactive") };
+    const recovering = { solve: this.solve(source.text, "interactive") };
     this.recovering = recovering;
     try {
       const { engineIdentity, value: track } = await recovering.solve.result;

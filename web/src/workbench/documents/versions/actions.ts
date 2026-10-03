@@ -1,7 +1,9 @@
 import type { SavedVersion } from "@/model/version";
 import { getResourceHead, getSavedVersion } from "@/io/storage";
-import { peekScenario, type ScenarioDoc } from "@/workbench/documents/scenario";
-import { peekTrajectory, type TrajectoryDoc } from "@/workbench/documents/trajectory";
+import { peekScenario } from "../scenario/collection";
+import type { ScenarioDoc } from "../scenario/document";
+import { peekTrajectory } from "../trajectory/collection";
+import type { TrajectoryDoc } from "../trajectory/document";
 import { reportProblem, requestConfirmation, resolveProblem, toast } from "@/workbench/feedback";
 import { captureAttention } from "@/workbench/navigation";
 import { ready } from "../operations";

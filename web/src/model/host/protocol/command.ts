@@ -12,9 +12,9 @@ export type CommandLine =
   | { noise_floor_dbm_hz: number }
   | { elevation_mask_deg: number };
 export type LevelUnit = "dbhz" | "dbm" | "dbw" | "scenario";
-export type CommandApplied = { epoch: number } | { rejected: string } | { discarded: "completed" | "stopped" | "refused" | "failed" } | null;
+type CommandApplied = { epoch: number } | { rejected: string } | { discarded: "completed" | "stopped" | "refused" | "failed" } | null;
 export type CommandRecord = { actionId: string; command: CommandLine; applied: CommandApplied };
-export type CommandReceipt = CommandRecord & {
+type CommandReceipt = CommandRecord & {
   target: RunId;
   state: "accepted" | "applied" | "rejected" | "discarded";
 };

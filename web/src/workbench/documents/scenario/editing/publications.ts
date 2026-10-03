@@ -5,7 +5,7 @@ import { listOf, recordOf } from "@/core";
 import { gpsOfTime, timeOf, type TimeType } from "@/model/gnss";
 import type { Path } from "@/model/schema";
 import { inavServiceChanges, timeChanges, type PublicationRules } from "@/model/scenario";
-import type { ScenarioDoc } from "@/workbench/documents/scenario";
+import type { ScenarioDoc } from "../document";
 import { editDocument } from "../../editing";
 
 type PublicationFamily = "gps" | "inav" | "d2";

@@ -6,7 +6,7 @@ import { openProblems } from "@/workbench/feedback";
 import { ageText, nameOf, radioWord } from "@/workbench/hosts";
 import { retry } from "@/workbench/hosts/actions";
 import { Button, Fig } from "@/page/shared/ui";
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../display";
 import { ScrollArea } from "../scroll";
 import { DetailSection, Pairs } from "./section";
 import { Settings } from "./device/settings";

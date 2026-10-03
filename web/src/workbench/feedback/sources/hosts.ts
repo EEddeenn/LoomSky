@@ -1,6 +1,6 @@
 import { acknowledge, retry, stopHost } from "@/workbench/hosts/actions";
 import { commandWords, hosts, hostView, mayAir, nameOf, onAirSeen, radioWord, rfBound, sourceWords, stopUnconfirmed, uncertainty, type Host } from "@/workbench/hosts";
-import { retryHosts } from "@/workbench/hosts/connection";
+import { retryHosts } from "@/workbench/hosts/connection/registration";
 import { gpsClock, utcClock } from "@/model/gnss";
 import { scenarioCatalog } from "@/workbench/documents/scenario";
 import { navigate } from "@/workbench/navigation";

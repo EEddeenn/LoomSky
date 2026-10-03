@@ -79,6 +79,3 @@ export function clearArtifactCache(): void {
   for (const read of queued.splice(0)) { read.reject(error); reads.delete(read); }
   shared.clear(); savedBytes.clear(); retainedBytes = 0;
 }
-export function artifactCacheStats() {
-  return { entries: savedBytes.size, bytes: retainedBytes, activeReads, queuedReads: queued.length, maxEntries, maxBytes, maxActiveReads, maxQueuedReads };
-}

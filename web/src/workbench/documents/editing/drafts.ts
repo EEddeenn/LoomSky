@@ -150,8 +150,7 @@ export function writeFieldChanges(doc: TextDocument, changes: readonly WriteChan
   publishFieldChanges(doc, transaction, changes);
 }
 
-export function hasDrafts(doc: TextDocument): boolean { return draftCount(doc) > 0; }
-export function draftCount(doc: TextDocument): number { return registries.get(doc)?.entries.size ?? 0; }
+export function hasDrafts(doc: TextDocument): boolean { return (registries.get(doc)?.entries.size ?? 0) > 0; }
 
 function prepareEntry(doc: TextDocument, entry: Entry): { issue: DraftIssue } | { changes: readonly WriteChange[] } {
   const path = resolveField(doc, entry.ref);

@@ -59,7 +59,7 @@ export function useOperations(): readonly Operation[] {
   return useStore(operations, (state) => state.records);
 }
 
-export function operationOf(id: string): Operation | undefined {
+function operationOf(id: string): Operation | undefined {
   return operations.get().records.find((record) => record.id === id);
 }
 

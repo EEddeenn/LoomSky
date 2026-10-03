@@ -4,8 +4,8 @@ import {
   applyPlanCommand, createPlanRule, freshPlanId, planFrom, selectionExists, type Plan, type PlanCommand, type PlanEditMode, type PlanEntityKind,
   type PlanPosition, type PlanQuantity, type PlanScope, type PlanValue, type Track,
 } from "@/model/trajectory";
-import type { TrajectoryDoc } from "@/workbench/documents/trajectory";
-import { EditingSession } from "../../editing";
+import type { TrajectoryDoc } from "../document";
+import { EditingSession } from "../../editing/session";
 import type { EditOutcome, Selection, Tool } from "./types";
 
 type Baseline = Readonly<{ rev: number; source: Plan; track: Track | null; text: string }>;
@@ -190,7 +190,7 @@ export class TrajectorySession extends EditingSession {
     return true;
   }
 
-  clearDrawing(): boolean {
+  private clearDrawing(): boolean {
     const kind = this.drawingKind;
     if (kind === null || this.drawing.length === 0) return false;
     this.editorState.set((state) => ({

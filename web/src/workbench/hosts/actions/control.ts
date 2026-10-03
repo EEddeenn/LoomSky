@@ -5,7 +5,7 @@ import { isCommandReceipt, isLive, sameCommand, sameRun, type CommandLine, type 
 import { hostsDb } from "@/io/storage";
 import { discardPrepared, hostAccess, prepare, recover, requestStop, service, submissionReply } from "../lifecycle";
 import { canStop, changed, currentWindow, hostOf, nameOf, readyForTransmission, stopTargets, type Host } from "../state";
-import { saveCredentials } from "../connection";
+import { saveCredentials } from "../connection/registration";
 import { pollNow } from "../runtime";
 import { commandWords, hostView, sourceWords } from "../display";
 

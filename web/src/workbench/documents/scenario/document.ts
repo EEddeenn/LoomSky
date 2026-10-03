@@ -10,7 +10,7 @@ import { resourceSummary, type ResourceHead, type ResourceSummaryTrajectory, typ
 import type { ArtifactFile } from "@/model/artifact";
 import type { TrajectoryRevision } from "@/model/trajectory";
 import { writeTransaction, type PendingIssue, type Prepared, type WriteChange } from "@/model/document";
-import { commitFieldInputs, prepareFieldInputs, publishFieldChanges } from "../editing";
+import { commitFieldInputs, prepareFieldInputs, publishFieldChanges } from "../editing/drafts";
 import { appendCollectionItem, coverageWindow, inputFileName, scenarioBindingHistory, scenarioBindings, scenarioFileReferences, setScenarioBindings, type ScenarioBindings, type ScenarioFileField, type ScenarioFileReference, type ScenarioFileSelection } from "@/model/scenario";
 import { systemsOf } from "@/model/schema";
 import { schemas } from "@/workbench/schemas";
@@ -18,7 +18,7 @@ import { SavedWorkingCopy, savedHistory } from "../saved";
 import { DocumentEditor } from "../editing/session";
 import { resolveTrajectoryBuild } from "../trajectory/builds";
 import { ScenarioEvaluation, type ScenarioRecovery } from "./evaluation";
-import { ScenarioSession } from "./editing";
+import { ScenarioSession } from "./editing/session";
 
 type ScenarioWindow = { startGpsMs: number; durationMs: number; leap: Leap };
 type BoundTrajectory = ResourceSummaryTrajectory & { buildId: string; file: ArtifactFile; name: string };
@@ -26,7 +26,6 @@ type BoundTrajectory = ResourceSummaryTrajectory & { buildId: string; file: Arti
 export class ScenarioDoc {
   readonly id: string;
   readonly kind = "scenario";
-  readonly created: number;
   readonly editor: DocumentEditor;
   readonly editing: ScenarioSession;
   readonly saved: SavedWorkingCopy<ScenarioSavedVersion>;
@@ -42,7 +41,6 @@ export class ScenarioDoc {
 
   constructor({ head, version }: SavedResource<"scenario">) {
     this.id = head.id;
-    this.created = head.created;
     this.editor = new DocumentEditor({
       id: this.id, kind: this.kind, text: version.snapshot.source.text,
       extensions: [scenarioBindings.init(() => version.snapshot.bindings), scenarioBindingHistory, savedHistory],
@@ -139,7 +137,7 @@ export class ScenarioDoc {
     if (this.saved.version.id !== version.id) this.reloadSaved({ head, version });
   }
 
-  reloadSaved(resource: SavedResource): void {
+  private reloadSaved(resource: SavedResource): void {
     if (resource.version.kind !== "scenario" || resource.head.kind !== "scenario") throw new Error("Choose a saved scenario version");
     if (this.lifetime !== "active") throw new Error("The scenario is no longer editable");
     const snapshot = resource.version.snapshot;
@@ -150,11 +148,6 @@ export class ScenarioDoc {
       this.editor.reset(snapshot.source.text, [scenarioBindings.init(() => bindings), scenarioBindingHistory, savedHistory]);
       this.edited();
     });
-  }
-
-  commitFieldInputs(): PendingIssue | null {
-    if (this.lifetime !== "active") throw new Error("Scenario is not editable");
-    return commitFieldInputs(this.editor);
   }
 
   prepareSnapshot(): PendingIssue | null {
@@ -373,7 +366,7 @@ export class ScenarioDoc {
     return { startGpsMs, durationMs, leap };
   }
 
-  names(): ScenarioFileReference[] {
+  private names(): ScenarioFileReference[] {
     return scenarioFileReferences(this.editor.value([]));
   }
 

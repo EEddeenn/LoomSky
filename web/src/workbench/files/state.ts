@@ -20,10 +20,6 @@ let generation = 0;
 let request = 0;
 let active = false;
 
-export function loadFileLibrary(): Promise<void> {
-  return fileLibrary.get().loaded ? Promise.resolve() : loading ?? reloadFileLibrary();
-}
-
 export function reloadFileLibrary(): Promise<void> {
   request++;
   if (loading !== null) return loading;

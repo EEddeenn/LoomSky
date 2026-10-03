@@ -37,5 +37,3 @@ export function useSignalQueries(frame: PreviewFrame, { sky = true, timeline = t
     retry,
   };
 }
-
-export type LaneReading = NonNullable<ReturnType<typeof useSignalQueries>["lane"]>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { sourceWords } from "@/workbench/hosts";
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../../display";
 import { duration, fixed, group, offset, useStore } from "@/core";
 import { gpsClock, gpsDate } from "@/model/gnss";
 import { scenarioCatalog } from "@/workbench/documents/scenario";

@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { openScenario, scenarioCatalog, type ScenarioDoc } from "./scenario";
-import { openTrajectory, trajectoryCatalog, type TrajectoryDoc } from "./trajectory";
+import { openScenario, scenarioCatalog } from "./scenario/collection";
+import type { ScenarioDoc } from "./scenario/document";
+import { openTrajectory, trajectoryCatalog } from "./trajectory/collection";
+import type { TrajectoryDoc } from "./trajectory/document";
 import { DocumentMissingError } from "./collection";
 import { useStore } from "@/core";
 

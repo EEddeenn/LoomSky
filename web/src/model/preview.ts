@@ -16,7 +16,7 @@ export type PreviewRunIdentity = Readonly<{
   engineIdentity: string;
   digest: string;
 }>;
-export type PreviewSourceIdentity = { kind: "scenario"; id: string; revision: number; digest: string } | { kind: "run"; run: PreviewRunIdentity };
+type PreviewSourceIdentity = { kind: "scenario"; id: string; revision: number; digest: string } | { kind: "run"; run: PreviewRunIdentity };
 export type PreviewSource = Readonly<{
   identity: PreviewSourceIdentity;
   key: string;

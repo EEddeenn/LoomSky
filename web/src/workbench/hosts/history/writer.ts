@@ -25,7 +25,7 @@ type Write = {
   problem: string | null;
 };
 
-export type RunHistoryOwner = {
+type RunHistoryOwner = {
   remember(h: Host, snapshot: Snapshot, now?: number, urgent?: boolean): void;
   flushDue(now: number): void;
   changed(key: string | null): void;

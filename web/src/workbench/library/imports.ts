@@ -1,7 +1,7 @@
 import { createStore, randomId, useStore } from "@/core";
 import { hasAttention, captureAttention } from "@/workbench/navigation";
 import { startImport } from "@/workbench/operations";
-import { acceptLibraryImports, libraryPicker } from "./picker";
+import { acceptLibraryImports, libraryPicker } from "./picker/session";
 import { setLibraryBrowse } from "./browse";
 import type { ImportKind } from "@/workbench/operations";
 

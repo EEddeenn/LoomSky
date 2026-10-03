@@ -4,7 +4,7 @@ import type { ResourceRef } from "@/model/resource";
 import type { ScenarioSnapshot, TrajectorySnapshot } from "@/model/version";
 
 export type ImportKind = "scenario" | "trajectory" | "file";
-export type OperationPhase = "preparing" | "running" | "committing" | "succeeded" | "partial" | "failed" | "cancelled";
+type OperationPhase = "preparing" | "running" | "committing" | "succeeded" | "partial" | "failed" | "cancelled";
 type OperationState = {
   id: string;
   name: string;

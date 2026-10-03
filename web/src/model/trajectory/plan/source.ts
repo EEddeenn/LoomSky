@@ -57,7 +57,7 @@ export type PlanInitialState = {
   accelerationEcef?: PlanVector;
   course?: number;
 };
-export type PlanInitialGuess = { eventTimes?: Record<string, number>; states?: PlanInitialState[] };
+type PlanInitialGuess = { eventTimes?: Record<string, number>; states?: PlanInitialState[] };
 export type Plan = {
   format: "pharos.trajectory-plan";
   version: 1;

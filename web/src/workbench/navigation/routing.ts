@@ -7,7 +7,7 @@ import { normalizeRoute, parseRoute, resourceOf, routePath, type Destination, ty
 import { closePageSessions } from "./sessions";
 import { page, publishPage, type DocumentFocus, type DocumentTarget } from "./state";
 
-export type NavigationOptions = { history?: "push" | "replace" };
+type NavigationOptions = { history?: "push" | "replace" };
 let nextVisit = 0;
 let nextFocus = 0;
 type ConfirmLeave = (current: Route, next: Route, leave: () => void) => boolean;

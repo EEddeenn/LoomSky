@@ -18,7 +18,7 @@ export type Pending = {
 };
 
 type Upload = { share: number; source: SubmissionSource; cancel: AbortController };
-export type HostSource = { key: string; record: SubmissionRecord | null; error: string | null };
+type HostSource = { key: string; record: SubmissionRecord | null; error: string | null };
 type Alarm = {
   kind: "failed" | "restarted";
   run: number;

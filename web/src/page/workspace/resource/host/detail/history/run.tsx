@@ -2,7 +2,7 @@
 
 import { EffectiveInspector } from "@/page/shared/preview/effective";
 import { sourceWords } from "@/workbench/hosts";
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../../display";
 import { submissionTruthOf } from "@/model/host";
 import type { SubmissionRecord } from "@/model/host";
 import { TruthButtons } from "@/page/shared/preview/outputs";

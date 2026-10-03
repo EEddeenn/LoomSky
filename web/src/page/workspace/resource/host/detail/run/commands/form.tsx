@@ -7,7 +7,7 @@ import { commandFromDraft, type LevelUnit } from "@/model/host";
 import { systems } from "@/model/gnss";
 import { useStore } from "@/core";
 import { page, setCommand } from "@/workbench/navigation";
-import type { HostDisplay } from "@/page/workspace/resource/host";
+import type { HostDisplay } from "../../../display";
 import { Button, Icon, Softkeys, TextInput, Unit } from "@/page/shared/ui";
 
 const levelUnits: readonly (readonly [LevelUnit, string])[] = [

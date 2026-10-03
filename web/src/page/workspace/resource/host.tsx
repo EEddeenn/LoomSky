@@ -19,8 +19,6 @@ const tabs: readonly (readonly [HostTab, string])[] = [
   ["device", "Device"],
 ];
 
-export type HostDisplay = { host: Host; now: number; view: ReturnType<typeof hostView> };
-
 export function HostResource({ host, route }: { host: Host; route: ResourceRoute }) {
   const now = useNow();
   const view = hostView(host, now);

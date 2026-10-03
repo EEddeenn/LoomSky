@@ -2,7 +2,7 @@ import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { ExpressionSpecification, LayerSpecification, StyleSpecification, SymbolLayerSpecification } from "maplibre-gl";
 import type { Basemap } from "@/model/basemap";
 import type { Theme } from "@/workbench/theme";
-import { sans } from "@/page/shared/ui";
+import { sans } from "@/page/shared/ui/fonts";
 
 const grey: Record<Theme, Partial<Flavor>> = {
   light: {

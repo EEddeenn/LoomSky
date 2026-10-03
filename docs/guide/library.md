@@ -59,8 +59,8 @@ depend on the resource.
 
 | Resource | Actions menu |
 |---|---|
-| scenario | **Duplicate**, **Export…**, **Archive…** |
-| trajectory | **Duplicate**, **Export trajectory JSON**, **Export PHT**, **Archive…**; PHT export compiles and verifies its captured Plan |
+| scenario | **Duplicate**, **Export…**, **Delete…** |
+| trajectory | **Duplicate**, **Export trajectory JSON**, **Export PHT**, **Delete…**; PHT export compiles and verifies its captured Plan |
 | data file | **Rename…**, **Export**, **Remove from Library…** |
 | transmitter | **Device settings**, **Remove connection…** |
 
@@ -69,9 +69,9 @@ review** when it has unsaved work, and **Stop** for a transmitter that may
 be active. Removal actions open a
 [confirmation](activity.md#confirm-an-action).
 
-The actions menu shows how many background operations are running and
-keeps its actions available. Repeating an identical request joins that
-operation; changed content or another format can start a separate one.
+Background operations remain visible in Activity. Repeating an identical
+request joins that operation; changed content or another format can start
+a separate one.
 
 Library Preview shows the latest saved document and any retained build.
 It identifies a version that has not yet been checked or solved; opening
@@ -92,7 +92,7 @@ such as **v1**, beside **Save**. Edits remain in the working copy until you choo
 unsaved changes separately from check or solve results.
 
 Save retains a complete source snapshot and its selected inputs. It creates
-the next version only when those contents change. Invalid JSON or failed
+the next version each time. Invalid JSON or failed
 checks can be saved; a field or name that cannot be applied must first be
 corrected or reverted. Preview, checks and exports do not save the original
 document. **Duplicate** creates a separate document at v1 from the current
@@ -100,16 +100,9 @@ contents.
 
 Saved Library changes appear in other tabs opened at the same page origin.
 A document without local edits or editing history follows its latest saved
-version. A document with local work keeps it and shows a notice with **View
-versions**, **Load latest…** and **Save a copy**. [Storage and recovery](storage.md) describes
-these choices and archival in another tab.
-
-Choose **Recover drafts** in Library to restore checkpointed source and
-unapplied input, or discard a stored recovery entry after confirmation.
-Restoring a draft starts a new document undo/redo history. Recovery drafts
-remain separate from saved versions.
-[Draft recovery](storage.md#draft-recovery) explains reload and storage-failure
-behavior.
+version. A document with local work keeps it; Save appends that work as the
+next version. [Storage](storage.md) describes browser
+persistence and Save failures.
 
 Open the version control in a document header to inspect saved history.
 Use its close control to return to the document. Browser Back follows the
@@ -119,16 +112,17 @@ Choose **Save** to retain the restored contents as a new version; the earlier
 history remains in place. See [scenarios](scenarios.md) and
 [trajectories](trajectories.md) for the editing workflow.
 
-**Archive…** removes a scenario or trajectory from the active Library and
-discards its unsaved working copy after confirmation. Saved versions,
-generated builds, input bytes and run snapshots remain available to their
-existing references. See [storage](storage.md) for the retained records.
+**Delete…** removes a scenario or trajectory, its saved versions and builds,
+and its unsaved working copy after confirmation. A saved scenario version
+using a trajectory, or a pending transmission or submitted run using a
+scenario, blocks deletion with an explanation. Shared file bytes remain in
+browser storage. See [storage](storage.md#file-identities-and-deletion).
 
 ## Create and import
 
 | Menu choice | Creates or reads |
 |---|---|
-| **New → Scenario…** | a scenario with a name and optional description |
+| **New → Scenario** | a scenario opened directly in Setup with a default name ready to edit |
 | **New → Trajectory** | one editable Plan with geometry, events and rules |
 | **New → Add transmitter…** | a checked connection to a radio host |
 | **Import → Scenario JSON…** | `.json` scenario files |
@@ -213,26 +207,17 @@ scenario checks the selected contents when it uses them.
    it. The picker closes when the choice succeeds.
 
 A single-file replacement uses the chosen entry's filename. A trajectory
-picker lets you choose a resource and one of its saved versions, then inspect
-the generated result. Selecting a version prepares its result when needed;
-selecting a retained build loads its exact saved artifacts. The working
-copy cannot be used until it is saved.
-**Use vN** fixes that saved version and exact build in the scenario's working
-copy. The scenario still needs **Save** to retain the selection. The version
+picker lists saved versions and their source details. Browsing the list does
+not start a build. Unsaved edits become available after Save in the editor.
+**Use vN** prepares the chosen version when needed and fixes that version and
+exact build in the scenario's working copy. An existing selected build is
+reused. The scenario still needs **Save** to retain the selection. The version
 selection rules are in [trajectories](trajectories.md).
 
-The saved-version picker also retains archived resources. Versions whose
-checks fail can be inspected, but cannot be used as a generated input.
-Use **Retry preparation** after a temporary loading or execution failure.
-If checks reject the source itself, open the editor, correct it and save a
-new version before choosing it again.
-The **Working copy** entry says **Save first**; **Open editor** returns to
-the document to save its changes.
-
-Changing selection or closing the picker releases its automatic
-preparation. A build needed elsewhere can continue, and a result already
-being saved finishes that save. Cancelled preparation does not add a failed
-build to history or remove a retained result.
+If preparation fails, the picker stays open with the error. Choose **Use vN**
+again to retry a temporary failure. If checks reject the source itself, correct
+it in the editor and save a new version. A missing selected version is reported
+instead of substituting another version.
 
 **Upload…** imports a resource while the picker is open and selects
 accepted results. It adds to an existing multiple selection. A file of
@@ -281,22 +266,20 @@ history entry's category, search, sort, selection, scroll position and
 Preview visibility. A newly opened picker starts with its own search,
 sort and selection. Opening a resource from Library uses its last section
 and editor view. Switching resources keeps preview time, pinned runs,
-signal selection, selected trajectory objects, expanded rows, field and
-name drafts, table input, unfinished drawings and timeline range input.
-Leaving an editor cancels an active
-drag. History also restores editor scroll positions and workspace map
-cameras. Older view positions can return to defaults during extended
-browsing; working copies and their editing state remain in memory for the
-page session. Reload follows the current URL; workspace map cameras remain
-in the same tab, while theme is shared with other tabs at this origin.
+signal selection and expanded rows. Switching sections or Form/JSON within
+the same document keeps its editing input. Leaving an editor cancels an active
+drag. History also restores editor scroll positions. Older view positions
+can return to defaults during extended browsing. Maps open fitted to the
+available track and editing geometry. Reload follows the current URL;
+theme is shared with other tabs at this origin.
 The broader persistence table is in [storage](storage.md).
 
-Switching pages does not create a saved version. LoomSky keeps visited
-working copies and their undo/redo history in page memory, and checkpoints
-source and unapplied input for recovery. Save each changed document when
-its content should become a version. The browser asks before
-leaving while documents have unsaved changes or unapplied inputs; the newest
-input may still be newer than its recovery checkpoint.
+Leaving an editor with unsaved work opens a small card at the bottom right.
+Choose **Save and leave** to save before navigating, or **Discard and leave**
+to drop the unsaved edits and unapplied inputs. Cancelling keeps the editor
+open. Switching sections or Form/JSON in the same document needs no prompt.
+Reloading or closing the browser page uses the browser’s own warning;
+unsaved editing state is not stored for recovery.
 
 Switching pages leaves host polling, pending Stop requests and captured
 operations running. Automatic document checks stop when their editor closes;
@@ -318,7 +301,7 @@ in the top bar.
 | multiple-selection picker | Up, Down, Home, End | moves focus and Preview without changing the checked selection |
 | single-selection picker | Up, Down, Home, End | moves and selects the row |
 | actions menu | Up, Down, Home, End | moves among enabled menu items |
-| scenario or trajectory editor | Ctrl+S / ⌘S | saves the current document as the next version when its contents changed |
+| scenario or trajectory editor | Ctrl+S / ⌘S | saves the current document as the next version |
 | editor outside a text input | Ctrl+Z / ⌘Z; add Shift to redo | cancels an active interaction; otherwise undoes or redoes draft drawing points or document history |
 | unapplied editor field | Escape | reverts that field's unapplied text |
 | active trajectory drag | Escape | cancels the drag |

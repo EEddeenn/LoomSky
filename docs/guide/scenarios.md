@@ -29,9 +29,9 @@ describe the physics and message content.
 
 ## Create or import
 
-In [Library](library.md), choose **New → Scenario…**, enter a **Name** and
-an optional **Description**, then choose **Create**. The new scenario has
-only its document version, name and optional description. Set the start,
+In [Library](library.md), choose **New → Scenario** to open Setup immediately.
+The default **Name** is focused for editing; add a **Description** there if
+needed. The new scenario has only its document version and name. Set the start,
 choose signals, adopt a trajectory and select the required input files.
 Configure the outputs you need; enabling IF samples leaves their format,
 sample rate and centre frequency for you to choose. Set a duration when
@@ -60,19 +60,17 @@ Later edits to either scenario are independent.
 
 Open the scenario to see its latest saved **vN**, save status and check
 status. **Form / JSON** switches the editor view. **Save** or Ctrl+S / Cmd+S
-retains changed content as the next complete version. Open **vN** for
+retains the current content as the next complete version. Open **vN** for
 **Version history**. The action menu contains **Duplicate**, **Export…** and
-**Archive…**; **Transmit…** opens the transmission workflow. When the editor
+**Delete…**; **Transmit…** opens the transmission workflow. When the editor
 has unsaved changes, **Save & review** explicitly saves them first.
 
-Configuration stays on the left, with **Setup**, **Data**, **Signals**,
-**Messages** and **Outputs** tabs. The preview stays beside it when
-switching tabs or using JSON. Drag the divider to resize configuration,
-or choose **Dock below** / **Dock right** in the preview. A narrow editor
-places the preview below configuration. Configuration width and the
-preview's dock, selected view and satellite are remembered for recent
-scenario views during the page session. Older view settings may return to
-their defaults.
+Configuration has **Setup**, **Data**, **Signals**, **Messages** and **Outputs**
+tabs. The header's preview control shows or hides the preview in Form and JSON.
+When hidden, the editor uses the full width. When shown, the preview sits
+beside configuration on a wide screen and below it on a narrow screen; drag
+the divider to resize the side-by-side panes. Visibility, width, selected
+view and satellite are remembered for recent scenario views in this page session.
 
 | Section | What to configure |
 |---|---|
@@ -84,8 +82,7 @@ their defaults.
 
 The preview offers **Map**, **Sky / C/N0** and **Effective values**, with a
 shared inspection time and timeline. Configuration tabs preserve the
-chosen preview; **Related: …** switches to the view associated with the
-current tab. The [preview guide](previews.md) explains checked working copies,
+chosen preview. The [preview guide](previews.md) explains checked working copies,
 satellite selection and output availability.
 
 The tabs and groups mark errors and warnings. Expandable groups show
@@ -120,11 +117,10 @@ resulting time and checks before transmitting.
 ## Adopt a trajectory
 
 Create or import the trajectory in Library, then return to Setup and
-choose **Choose from Library…**. Select a trajectory and a saved version.
-The picker shows its source, checks and dependencies and prepares a build
-when needed. Choose **Use vN** after that version has a verified result.
-The working copy is shown separately and must be saved before it can be
-selected as a version.
+choose **Choose…**, or **Change…** for an existing selection. Select a
+trajectory and a saved version. The picker shows its source and dependencies;
+**Use vN** prepares the verified result when needed. Browsing does not build.
+Save edits in the trajectory editor before selecting them as a version.
 
 The selection fixes both the Plan source and exact compiled PHT. Setup
 shows the trajectory's saved version. Editing or saving the shared
@@ -166,7 +162,7 @@ to different contents at the same time. Rename one Library entry before
 selecting it when names collide. Renaming or removing a Library entry
 later does not alter an existing scenario's selected name or contents.
 
-File selection checks that the scenario and selected entries still match
+File selection checks that the related reference and selected entries still match
 what was reviewed. If they change while the picker is open or while bytes
 are being read, close the picker, review the inputs and choose again.
 Uploading through a picker saves the file in Library; cancelling the
@@ -182,8 +178,8 @@ defines file formats, record selection and precise-product requirements.
 Form and JSON edit the same document and share its undo history. Opening
 a section or switching views preserves unknown keys and explicit default
 values. A JSON parse error disables the form controls until the text is
-corrected; the diagnostic identifies its line and column. JSON occupies
-the configuration pane while the preview stays available. Map, sky,
+corrected; the diagnostic identifies its line and column. JSON uses the
+configuration pane, or the full editor width when the preview is hidden. Map, sky,
 timeline and effective values can show the same marked earlier checked
 result; output downloads prepare and check captured working content. See
 [previews](previews.md) for source and status details.
@@ -196,27 +192,26 @@ result; output downloads prepare and check captured working content. See
 | Esc in an unapplied field, or **Revert** | discards that pending text and shows the applied value |
 | Invalid input | stays marked **Not applied**; it does not overwrite the applied value |
 | Applying an edit, undo or redo | changes the working copy and schedules checking |
-| **Save** or Ctrl+S / Cmd+S | applies valid pending field text and saves changed content as the next complete version |
+| **Save** or Ctrl+S / Cmd+S | prepares pending fields and table input, then saves the current content as the next complete version |
 | Publication copy, table fill or compound branch change | applies its related JSON changes as one document undo step |
 
-Unapplied text follows the document across sections, resources and views.
-Table selections, batch values and pasted table text also remain available
-when you return. [Draft recovery](storage.md#draft-recovery) checkpoints this
-work separately from saved versions and can restore it after reload. The
-header marks unapplied inputs separately from changes to the working copy.
-Save, export, duplication and input selection apply valid pending field
-values; an invalid or conflicting value must be corrected or reverted
-before the operation continues. Batch and paste text waits for its table
-action and is excluded from saved or exported content until applied.
-Export and duplication leave the original working copy unsaved.
+Unapplied text follows the document across its sections and Form/JSON
+views. Table selections, batch values and pasted table text also remain
+available there. Leaving the editor with unsaved work offers **Save and
+leave** or **Discard and leave** in a small card at the bottom right.
+Discarding drops unsaved edits and pending inputs. Both count as **Unsaved** in the header. Save, export and duplication prepare pending field,
+batch and paste values together; invalid or conflicting input must be
+corrected or reverted first. Export and duplication leave the original
+working copy unsaved. Ordinary controls and file or trajectory selection
+change only their related fields and preserve unrelated pending text.
 
 Batch and paste input is checked against the table and containing list as
 they were when typing began. Unrelated edits preserve this input. Changing the table or
 changing, reordering or removing its containing list retains the text but
 blocks applying it until discarded. Choose **Discard pending input** beside
 the table, or **Discard input** in Problems; the Problems action remains
-available after a publication is removed. Save still preserves this text
-without applying it.
+available after a publication is removed. Save keeps the input visible and
+reports the conflict instead of saving a partial version.
 
 Fields on objects with an `id` follow that object if JSON reorders its list.
 If the object disappears, its ID becomes ambiguous or the applied field
@@ -224,16 +219,14 @@ changes, the unapplied text is retained as a conflict. Problems offers
 **Revert** when the object can no longer be located. Numeric table cells
 continue to refer to their row and column positions.
 
-In Form, Ctrl+Z or Cmd+Z outside a text input undoes a document edit;
-adding Shift redoes it. A focused input keeps its own text-editing keys.
+The header has **Undo** and **Redo** beside Save. In Form, Ctrl+Z or Cmd+Z
+outside a text input undoes a document edit; adding Shift redoes it. A focused input keeps its own text-editing keys.
 The JSON editor uses its document undo and redo commands. Undoing a file
 selection or trajectory adoption restores the JSON and selected input
-identities together. The document's undo history survives navigation during
-the page session. Recovery drafts retain the current source and unapplied
-input; restoring one starts a new document undo/redo history. Saved version
-history is separate: **Restore working copy** replaces the working
-content and clears its unapplied input, including table drafts. Save then appends a new
-version without deleting later history.
+identities together. The document's undo history follows it across sections
+and Form/JSON views. Saved version history is separate: **Restore working
+copy** replaces the working content and clears its unapplied input, including
+table drafts. Save then appends a new version without deleting later history.
 
 ## Signals, power and ionosphere
 
@@ -310,7 +303,7 @@ when their carrier signals or sample output are absent; the page explains
 why they are inactive. These controls do not add the carrier signals for
 you.
 
-## Checks, export and archival
+## Checks, export and deletion
 
 Applied source edits schedule a check while the scenario editor is open.
 Leaving the editor releases automatic check work; returning prepares the
@@ -333,11 +326,11 @@ share an output filename stop the export. It does not substitute a newer
 shared trajectory draft. [Exporting and restoring a scenario](storage.md#exporting-and-restoring-a-scenario)
 describes the archive and restore steps.
 
-**Archive…** opens a confirmation with the scenario and its unsaved input
-state. Confirming removes it from the active Library and discards its
-unsaved working copy. Every saved version, build, referenced file and
-submitted run remains available. A changed scenario must be reviewed again
-before archival.
+**Delete…** opens a short confirmation naming the scenario and warning that
+deletion cannot be undone. Confirming deletes every saved version and build and its unsaved
+working copy. A pending transmission or submitted run using the scenario
+blocks deletion with an explanation. Shared file bytes remain in browser
+storage.
 
 Use [previews and output files](previews.md) to inspect a checked result or
 start an export from captured working content. **Transmit…** opens the

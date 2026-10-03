@@ -31,11 +31,11 @@ messages and sample generation; those mechanisms remain in the
 | dependencies point toward their owners | views compose workflows; workflows use I/O; record and value modules do not call the workbench |
 | edit revisions identify in-memory work | an asynchronous result is installed only for the document or request that produced it |
 | navigation and business operations have separate lifetimes | history restores presentation; page sessions expire on departure, while document saves and confirmed submissions retain their owners |
-| Save appends complete versions | accepted edits remain in the working copy until an explicit Save; older saved source is immutable |
+| Save appends complete versions | valid pending input is applied together before capture; older saved source is immutable |
 | source versions and builds have separate identities | a saved source can have several retained build results, each with its engine fingerprint and exact artifact digests |
 | selection and submission capture values | later Library edits do not change a selected trajectory version or submitted run |
 | persistence has a completion boundary | a successful IndexedDB request is insufficient; the transaction must complete |
-| committed storage state is authoritative across tabs | completed writes announce the affected scope and key; readers reload stored records, and expected record revisions reject stale writes |
+| committed storage state is authoritative across tabs | completed writes announce the affected scope and key; readers reload stored records, and document saves append after the current stored head |
 | one caller owns each native object | the producer calls its Pharos run; the radio thread calls the device; each browser native object stays in its compute Worker |
 | limits precede transmission setup | the plan resolves format, band, gain and window before a run is tuned or sent |
 | expensive calls stay outside the control lock | driver and Pharos work cannot hold the mutex needed by Stop and status requests |
@@ -176,8 +176,9 @@ Names at module boundaries identify their resource: `ScenarioDoc` and
 `TrajectoryDoc`, `openScenario` and `openTrajectory`, `scenarioCatalog`
 and `trajectoryCatalog`. Lookup uses `peekScenario` and `peekTrajectory`;
 opening a resource installs one working copy in the tab's visited-document
-Map. It stays available across navigation. Each document composes an
-`editor`, `saved` state and a nullable evaluation `view`. Shared concepts use shared names: `DocumentDiagnostic`
+Map. Each document composes an `editor`, `saved` state and a nullable
+evaluation `view`. Text parsing, dirty comparisons and catalogue summaries
+are reused until their inputs change. Shared concepts use shared names: `DocumentDiagnostic`
 associates a diagnostic with a document kind, and `ArtifactFile` identifies a
 retained build file by name and digest. The latter belongs in
 `model/artifact.ts` because both scenario and trajectory builds use it.
@@ -223,7 +224,7 @@ flowchart TD
 | `workbench/documents/{scenario,trajectory}/` | each resource's working copy, evaluation, collection, transfer, editing, saved builds and user actions |
 | `workbench/documents/{editing,versions,builds}/` | shared editing-session contract and draft transactions, saved-history workflows and build-attempt/artifact mechanics |
 | `workbench/files/` | retained file catalogue, file inspection and file actions |
-| `workbench/library/` | cross-resource browsing, resolution, relations, import orchestration, picker and preview projections |
+| `workbench/library/` | cross-resource browsing, resolution, import orchestration, picker and preview projections |
 | `workbench/navigation/` | canonical routes, browser history, page visits, typed presentation memory, attention and owned sessions |
 | `workbench/transmit/` | complete transmission source and configuration session, validation and review |
 | `workbench/hosts/` | connection, actions and history submodules; host source, pending work, display and direct per-tab polling |
@@ -246,8 +247,9 @@ Header tools live beside their editor or detail body. The header host strip
 scrolls horizontally as registrations grow. Shared browsers and
 previews serve both workspaces and pickers. The shared document, resource
 and preview groups keep their distinct concepts below named owners.
-Views subscribe to workbench
-state and forward intent. Styles stay beside their components.
+Views subscribe to workbench state and forward intent. Document headers
+share Save status and Undo/Redo controls. Scenario preview uses responsive
+placement and one visibility toggle. Styles stay beside their components.
 `app/globals.css` owns shared tokens and base rules; CodeMirror's theme
 uses those tokens. The [workbench design](workbench.md) explains the
 lifetimes behind these views.
@@ -257,9 +259,8 @@ lifetimes behind these views.
 | Identity or value | Owner | Rule |
 |---|---|---|
 | document `id` and editor `rev` | visited document | the id names a working copy; its monotonic edit counter rejects stale work and is not a saved version number |
-| document `workingSequence` | active document | changes with applied content and pending field, name or scratch input; confirmations and asynchronous edits reject a changed working copy |
-| visited document | document collection | one instance per opened resource remains in the tab; its mounted evaluation view owns generated results and cancellation |
-| draft ID, runtime ID and revision | draft storage | plain checkpoints retain source, baseline and pending input separately from saved versions; a new runtime forks a recovered draft, with a fresh undo history |
+| document `workingSequence` | active document | identifies applied content and pending input for whole-document captures, deletion and restoration |
+| visited document | document collection | one instance per opened resource until release or deletion; its mounted evaluation view owns generated results and cancellation |
 | `FieldReference` | document model | an object ID resolves a field's current array position; missing or duplicate IDs fail resolution; arrays without object IDs use positional paths |
 | `ScenarioSession`, `TrajectorySession` | active document | own unapplied input and editor state across view changes; view departure cancels transient interaction, and restoration or disposal resets the session |
 | `PreviewSession` | scenario, trajectory, host or saved-run preview | owns manual/follow time intent, a pinned run and signal selection; resolves the frame consumed by that page's views |
@@ -270,8 +271,8 @@ lifetimes behind these views.
 | resource instance | navigation memory | persisted resource id or host registration id scopes bounded presentation state; removal invalidates that state without retaining a document object |
 | `visitId` and `AttentionToken` | navigation | each page activation has a new visit; subsequent interaction invalidates late restoration and automatic navigation |
 | `PageSession` | navigation | an abortable picker or transmission owner expires on page departure; parent abort closes child sessions; overlays do not add browser history entries |
-| `ResourceHead` | version storage | names a resource and its latest saved version; archival hides it from the active Library |
-| record revision and commit hint | storage transaction owner | expected revisions reject stale writes; scope/key hints and focus refresh trigger authoritative reads |
+| `ResourceHead` | version storage | names a resource and its latest saved version; Delete removes the head, versions and builds after checking saved scenario and run references |
+| record revision and commit hint | storage transaction owner | revisions order committed resource heads and guard mutable metadata writes; scope/key hints and focus refresh trigger authoritative reads |
 | `SavedVersion` | version model and storage | a complete immutable source snapshot with a per-resource `vN`, parent, content digest and optional restoration source |
 | `BuildRecord` | build owner and storage | identifies the saved input version, exact trajectory or pack engine fingerprint, diagnostics and retained artifact digests; another build does not overwrite it |
 | `TransmissionSession` | transmission workbench | owns one saved scenario build, configuration drafts and review in the same modal until close or submission |

@@ -3,7 +3,7 @@
 import { useStore } from "@/core";
 import { airingHosts, chipLabel, hostView, hosts, nameOf } from "@/workbench/hosts";
 import type { ScenarioDoc } from "@/workbench/documents/scenario";
-import { documentView, page, setView } from "@/workbench/navigation";
+import { documentView, page, setScenarioPreview, setView } from "@/workbench/navigation";
 import { openProblems } from "@/workbench/feedback";
 import { useNow } from "@/workbench/clock";
 import { openTransmit } from "@/workbench/transmit";
@@ -11,7 +11,7 @@ import { scenarioPreviewSession } from "@/workbench/preview";
 import { CheckSummary } from "@/page/shared/feedback";
 import { NavLink } from "@/page/shared/navigation";
 import { Button, Icon, Softkeys } from "@/page/shared/ui";
-import { DocumentSaveStatus, SaveDocumentButton, useDocumentSaveState } from "@/page/shared/documents/versions";
+import { DocumentHistoryButtons, DocumentSaveStatus, SaveDocumentButton, useDocumentSaveState } from "@/page/shared/documents/versions";
 
 const hostLooks = {
   onair: "bg-rf text-on-rf",
@@ -67,13 +67,15 @@ function Airing({ doc }: { doc: ScenarioDoc }) {
 
 export function ScenarioTools({ doc }: { doc: ScenarioDoc }) {
   const view = useStore(page, (s) => documentView(s.route));
-  const { dirty, pending, unapplied, saving, conflict } = useDocumentSaveState(doc);
-  const save = dirty || pending > 0 || unapplied;
+  const previewVisible = useStore(page, (s) => s.scenarioPreview.visible);
+  const { changed, saving } = useDocumentSaveState(doc);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Softkeys label="View" options={[["form", "Form"], ["json", "JSON"]]} value={view} onChange={setView} />
+      <Button size="sm" variant="ghost" icon="layers" aria-pressed={previewVisible} onClick={() => setScenarioPreview({ visible: !previewVisible })}>{previewVisible ? "Hide preview" : "Show preview"}</Button>
+      <DocumentHistoryButtons doc={doc} />
       <SaveDocumentButton doc={doc} />
-      <Button size="sm" icon="send" disabled={saving || conflict} onClick={() => openTransmit({ scenario: doc.id, replayFromMs: scenarioPreviewSession(doc).get().epochMs, ...(save ? { save: true } : {}) })}>{save ? "Save & review…" : "Transmit…"}</Button>
+      <Button size="sm" icon="send" disabled={saving} onClick={() => openTransmit({ scenario: doc.id, replayFromMs: scenarioPreviewSession(doc).get().epochMs, ...(changed ? { save: true } : {}) })}>{changed ? "Save & review…" : "Transmit…"}</Button>
     </div>
   );
 }
@@ -81,7 +83,7 @@ export function ScenarioTools({ doc }: { doc: ScenarioDoc }) {
 export function ScenarioStatus({ doc }: { doc: ScenarioDoc }) {
   return (
     <>
-      <CheckSummary docId={doc.id} status={doc.editor.status} diagnostics={doc.editor.diagnostics} />
+      {doc.editor.status === "ready" && doc.editor.diagnostics.length === 0 ? null : <CheckSummary docId={doc.id} status={doc.editor.status} diagnostics={doc.editor.diagnostics} />}
       <DocumentSaveStatus doc={doc} />
       <Airing doc={doc} />
     </>

@@ -1,13 +1,12 @@
 import { createStore } from "@/core";
 import { resourceKey, type ResourceRef } from "@/model/resource";
-import { BuildFailure } from "@/workbench/documents/builds";
 import { buildScenarioVersion, loadScenarioBuild } from "@/workbench/documents/scenario/builds";
 import { buildTrajectoryVersion, loadTrajectoryBuild } from "@/workbench/documents/trajectory/builds";
 import { closePageSession, createPageSession, isPageSession, noteInteraction } from "@/workbench/navigation";
 import { createVersionHistoryReader } from "@/workbench/documents/versions";
 import { libraryFileOf } from "@/workbench/files";
 import type { LibraryFilter, LibrarySort } from "../types";
-import type { LibraryPickerOptions, LibraryPickerSession, SavedVersionPickerOptions, SavedVersionPickerSession, VersionSelection } from "./types";
+import type { LibraryPickerOptions, LibraryPickerSession, SavedVersionPickerOptions, SavedVersionPickerSession } from "./types";
 
 export const libraryPicker = createStore<{ session: LibraryPickerSession | null }>({ session: null });
 let preparation: AbortController | null = null;
@@ -121,8 +120,6 @@ export async function selectLibraryResource(resource: ResourceRef): Promise<void
     return;
   }
   if (resource.kind !== session.options.kind || resource.id === session.resourceId) return;
-  preparation?.abort();
-  preparation = null;
   session.history?.dispose();
   const history = createVersionHistoryReader(resource.id);
   libraryPicker.set({ session: { ...session, resourceId: resource.id, history, selection: null, error: null } });
@@ -137,56 +134,20 @@ export async function refreshLibraryVersions(): Promise<void> {
   const current = activeVersions(session.id);
   if (data === null || current?.history !== history || current.selection !== null) return;
   const initial = current.options.selected;
-  const version = data.versions.find((item) => item.id === initial?.versionId) ?? data.versions[0];
-  if (version !== undefined) void prepareSavedVersion(current, version.id, false);
+  const version = initial?.resourceId === current.resourceId
+    ? data.versions.find((item) => item.id === initial.versionId) : data.versions[0];
+  libraryPicker.set({ session: { ...current, selection: version ?? null,
+    error: version === undefined && initial?.resourceId === current.resourceId ? "Selected version is no longer available." : null,
+  } });
 }
 
-export async function selectSavedVersion(versionId: string | "working", retry = false): Promise<void> {
+export function selectSavedVersion(versionId: string): void {
   const session = libraryPicker.get().session;
   if (session?.mode !== "versions" || session.busy) return;
-  noteInteraction();
-  await prepareSavedVersion(session, versionId, retry);
-}
-
-async function prepareSavedVersion(session: SavedVersionPickerSession, versionId: string | "working", retry: boolean): Promise<void> {
-  const previous = session.selection;
-  if (retry && (previous?.kind !== "saved" || previous.version.id !== versionId || previous.status !== "error" || !previous.retry)) return;
-  if (versionId === "working") {
-    preparation?.abort();
-    preparation = null;
-    libraryPicker.set({ session: { ...session, selection: { kind: "working" }, error: null } });
-    return;
-  }
-  if (!retry && previous?.kind === "saved" && previous.version.id === versionId && previous.status !== "error") return;
   const version = session.history?.state.get().data?.versions.find((item) => item.id === versionId);
   if (version === undefined || version.kind !== session.options.kind || version.resourceId !== session.resourceId) return;
-  preparation?.abort();
-  const controller = new AbortController();
-  preparation = controller;
-  const pending: VersionSelection = { kind: "saved", version, status: "loading" };
-  libraryPicker.set({ session: { ...session, selection: pending, error: null } });
-  const buildId = !retry && session.options.selected?.versionId === version.id ? session.options.selected.buildId : undefined;
-  try {
-    let selection: Extract<VersionSelection, { status: "ready" }>;
-    if (version.kind === "trajectory") {
-      const build = buildId === undefined ? await buildTrajectoryVersion(version.id, { rebuild: retry, signal: controller.signal }) : await loadTrajectoryBuild(buildId, { signal: controller.signal });
-      if (build.version.id !== version.id || build.version.resourceId !== version.resourceId) throw new Error("Generated trajectory does not match this version.");
-      selection = { kind: "saved", version, status: "ready", candidate: { kind: "trajectory", build } };
-    } else {
-      const build = buildId === undefined ? await buildScenarioVersion(version.id, { rebuild: retry, signal: controller.signal }) : await loadScenarioBuild(buildId, { signal: controller.signal });
-      if (build.versionId !== version.id || build.resourceId !== version.resourceId) throw new Error("Generated scenario does not match this version.");
-      selection = { kind: "saved", version, status: "ready", candidate: { kind: "scenario", build } };
-    }
-    controller.signal.throwIfAborted();
-    const current = activeVersions(session.id);
-    if (current?.selection === pending) libraryPicker.set({ session: { ...current, selection } });
-  } catch (error) {
-    if (controller.signal.aborted) return;
-    const current = activeVersions(session.id);
-    if (current?.selection === pending) libraryPicker.set({ session: { ...current, selection: { kind: "saved", version, status: "error", message: error instanceof Error ? error.message : String(error), retry: !(error instanceof BuildFailure) || error.record.reason === "execution" } } });
-  } finally {
-    if (preparation === controller) preparation = null;
-  }
+  noteInteraction();
+  libraryPicker.set({ session: { ...session, selection: version, error: null } });
 }
 
 export async function acceptLibraryImports(requestId: number, resources: readonly ResourceRef[]): Promise<void> {
@@ -212,7 +173,7 @@ export async function useLibrarySelection(): Promise<void> {
   const session = libraryPicker.get().session;
   if (session === null || session.busy) return;
   if (session.mode === "resources" && session.selected.length === 0) return;
-  if (session.mode === "versions" && (session.selection?.kind !== "saved" || session.selection.status !== "ready")) return;
+  if (session.mode === "versions" && session.selection === null) return;
   noteInteraction();
   libraryPicker.set({ session: { ...session, busy: true, error: null } });
   try {
@@ -227,11 +188,24 @@ export async function useLibrarySelection(): Promise<void> {
   }
 }
 
-function useSavedVersion(session: SavedVersionPickerSession): boolean | void | Promise<boolean | void> {
-  const { options, selection } = session;
-  if (selection?.kind !== "saved" || selection.status !== "ready") return false;
-  const { candidate } = selection;
-  if (options.kind === "trajectory" && candidate.kind === "trajectory") return options.onUse(candidate);
-  if (options.kind === "scenario" && candidate.kind === "scenario") return options.onUse(candidate);
-  return false;
+async function useSavedVersion(session: SavedVersionPickerSession): Promise<boolean | void> {
+  const { options, selection: version } = session;
+  if (version === null) return false;
+  const controller = new AbortController();
+  preparation = controller;
+  const buildId = options.selected?.versionId === version.id ? options.selected.buildId : undefined;
+  try {
+    if (options.kind === "trajectory") {
+      const build = buildId === undefined ? await buildTrajectoryVersion(version.id, { signal: controller.signal }) : await loadTrajectoryBuild(buildId, { signal: controller.signal });
+      controller.signal.throwIfAborted();
+      if (build.version.id !== version.id || build.version.resourceId !== version.resourceId) throw new Error("Generated trajectory does not match this version.");
+      return await options.onUse({ kind: "trajectory", build });
+    }
+    const build = buildId === undefined ? await buildScenarioVersion(version.id, { signal: controller.signal }) : await loadScenarioBuild(buildId, { signal: controller.signal });
+    controller.signal.throwIfAborted();
+    if (build.versionId !== version.id || build.resourceId !== version.resourceId) throw new Error("Generated scenario does not match this version.");
+    return await options.onUse({ kind: "scenario", build });
+  } finally {
+    if (preparation === controller) preparation = null;
+  }
 }

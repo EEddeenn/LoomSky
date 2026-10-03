@@ -68,7 +68,7 @@ flowchart LR
 | Run snapshot | stays fixed for the associated run and its local history |
 
 New, imported and duplicated documents begin at v1. **Save** creates the
-next version only when the saved contents change. A version can retain
+next version each time. A version can retain
 unfinished or invalid source; successful checks are a separate requirement
 for using a generated trajectory or transmitting a scenario.
 
@@ -114,9 +114,9 @@ The radio host reports execution state, sent ranges and counters. See
 
 Saved versions, their builds and input bytes, registrations and run snapshots
 are stored in the browser's origin. Edits stay in the working copy until
-**Save**; switching pages keeps that working copy for the current session.
-Archiving a document removes it from the active Library while retaining
-its saved history and run references. The radio host owns accepted execution,
+**Save**. Leaving an editor with unsaved work offers Save or Discard.
+**Delete** removes a document and its saved history after confirmation; existing
+references can block deletion. The radio host owns accepted execution,
 so navigation or page closure does not stop it. On reload, the browser restores
 its saved records and reconciles them with host status. See
 [Browser storage](storage.md) for saved versus session state and

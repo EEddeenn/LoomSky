@@ -9,19 +9,18 @@ export const scenarioCatalog = collection.catalog;
 export const scenarioDocuments = collection.documents;
 export const peekScenario = collection.get;
 export const openScenario = collection.open;
-export const restoreScenarioDraft = collection.restoreDraft;
-export const scenarioDraftDiscarded = collection.draftDiscarded;
 export const startScenarios = collection.start;
 export const loadScenarioCatalog = collection.load;
 export const reloadScenarioCatalog = collection.refresh;
-export const archiveScenario = collection.archive;
+export const deleteScenario = collection.remove;
+export const releaseScenario = collection.release;
 
 export async function createScenarioDocument(snapshot: ScenarioSnapshot, options: ResourceWriteOptions = {}): Promise<ScenarioDoc> {
   options.signal?.throwIfAborted();
   const captured = immutableCopy(snapshot);
   await loadScenarioCatalog();
   options.signal?.throwIfAborted();
-  const saved = await appendSavedVersion({ kind: "scenario", resourceId: crypto.randomUUID(), expectedRevision: null, created: Date.now(), snapshot: captured }, [], options);
+  const saved = await appendSavedVersion({ kind: "scenario", resourceId: crypto.randomUUID(), create: true, created: Date.now(), snapshot: captured }, [], options);
   return collection.add(new ScenarioDoc(saved));
 }
 
@@ -41,5 +40,5 @@ export function duplicateScenario(snapshot: ScenarioSnapshot, options: ResourceW
 }
 
 export function scenariosUsingTrajectory(id: string) {
-  return [...scenarioCatalog.get().entries.values()].filter((entry) => entry.head.archivedAt === null && (entry.working?.summary ?? entry.head.summary).trajectoryId === id);
+  return [...scenarioCatalog.get().entries.values()].filter((entry) => (entry.working?.summary ?? entry.head.summary).trajectoryId === id);
 }

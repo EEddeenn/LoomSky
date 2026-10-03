@@ -8,9 +8,9 @@ import { inputFileName, scenarioFileReferences, type ScenarioInputs } from "@/mo
 import type { GeneratedTrack } from "@/model/trajectory";
 import { immutableCopy, type BuildFailureReason, type ScenarioSnapshot, type SuccessfulTrajectoryBuild } from "@/model/version";
 import { artifactBytes, errorDiagnostic } from "../builds";
-import { loadTrajectoryBuild } from "../trajectory/builds";
+import { loadTrajectoryBuild, type SavedTrajectoryBuild } from "../trajectory/builds";
 
-type CompiledScenario = { diagnostics: DocumentDiagnostic[] } & (
+type CompiledScenario = { diagnostics: DocumentDiagnostic[]; dependency: SavedTrajectoryBuild | null } & (
   | {
     status: "success";
     engineIdentity: string;
@@ -34,11 +34,11 @@ type ScenarioInput = {
   captured: ScenarioSnapshot;
   diagnostics: DocumentDiagnostic[];
   files: NamedInput[];
-  trajectory: { input: ScenarioInputs; track: GeneratedTrack; record: SuccessfulTrajectoryBuild } | null;
+  trajectory: { input: ScenarioInputs; track: GeneratedTrack; record: SuccessfulTrajectoryBuild; dependency: SavedTrajectoryBuild } | null;
   reason: BuildFailureReason;
 };
 
-export async function compileScenarioSnapshot(snapshot: ScenarioSnapshot, options: TaskOptions = {}): Promise<CompiledScenario> {
+export async function compileScenarioSnapshot(snapshot: ScenarioSnapshot, options: TaskOptions = {}, dependency: SavedTrajectoryBuild | null = null): Promise<CompiledScenario> {
   options.signal?.throwIfAborted();
   const captured = immutableCopy(snapshot);
   const digests = new Set(scenarioFileReferences(jsonc.parse(captured.source.text))
@@ -50,13 +50,13 @@ export async function compileScenarioSnapshot(snapshot: ScenarioSnapshot, option
   const sizes = await fileByteLengths(digests);
   const release = reserveInput(captured.source.text.length * 2 + [...sizes.values()].reduce((sum, size) => sum + size, 0), options.signal);
   try {
-    const input = await prepareScenarioInput(captured, options);
+    const input = await prepareScenarioInput(captured, options, dependency);
     options.signal?.throwIfAborted();
     return await packScenarioInput(input, options);
   } finally { release(); }
 }
 
-async function prepareScenarioInput(captured: ScenarioSnapshot, options: TaskOptions): Promise<ScenarioInput> {
+async function prepareScenarioInput(captured: ScenarioSnapshot, options: TaskOptions, dependency: SavedTrajectoryBuild | null): Promise<ScenarioInput> {
   const { signal } = options;
   signal?.throwIfAborted();
   const selected = captured.bindings.trajectory;
@@ -67,10 +67,12 @@ async function prepareScenarioInput(captured: ScenarioSnapshot, options: TaskOpt
   if (selected === null) diagnostics.push(errorDiagnostic("scenario", "Select a saved trajectory version.", "trajectory"));
   else {
     try {
-      const built = await loadTrajectoryBuild(selected, options);
+      // The evaluation owns this decoded pin; pack receives a structured clone in its Worker.
+      const built = !options.fresh && dependency?.pin.versionId === selected.versionId && dependency.pin.buildId === selected.buildId
+        ? dependency : await loadTrajectoryBuild(selected, options);
       trajectory = {
         input: immutableCopy({ scenario: captured.source.text, source: built.version.snapshot.source, generated: built.record.artifacts.pht, files: captured.bindings.files }),
-        track: built.track, record: built.record,
+        track: built.track, record: built.record, dependency: built,
       };
       for (const diagnostic of trajectory.track.diagnostics) diagnostics.push({ ...diagnostic, file: "scenario", path: "trajectory" });
     } catch (error) {
@@ -128,7 +130,7 @@ async function packScenarioInput(prepared: ScenarioInput, options: TaskOptions):
     } else if (!diagnostics.some((diagnostic) => diagnostic.error) && trajectory !== null) {
       const bundleRecord = await captureFile(packed.bundle, options);
       return {
-        status: "success", engineIdentity, diagnostics, track: trajectory.track, trajectoryBuild: trajectory.record, input: trajectory.input,
+        status: "success", engineIdentity, diagnostics, dependency: trajectory.dependency, track: trajectory.track, trajectoryBuild: trajectory.record, input: trajectory.input,
         bundle: bundleRecord.bytes, bundleRecord, summary: packed.summary, digest: bundleRecord.digest,
       };
     }
@@ -141,6 +143,6 @@ async function packScenarioInput(prepared: ScenarioInput, options: TaskOptions):
   }
   return {
     status: "failure", reason, engineIdentity, diagnostics: diagnostics.toSorted((left, right) => Number(right.error) - Number(left.error)),
-    track: trajectory?.track ?? null,
+    track: trajectory?.track ?? null, dependency: trajectory?.dependency ?? null,
   };
 }

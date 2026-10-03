@@ -130,19 +130,26 @@ export function cancelConfirmation(id: string, version: number): void {
   if (record !== null && !record.pending && removeConfirmation(record)) log(record.scope, `Cancelled: ${record.title}`);
 }
 
-export async function confirmConfirmation(id: string, version: number): Promise<void> {
+export async function confirmConfirmation(id: string, version: number, alternative = false): Promise<void> {
   const record = currentConfirmation(id, version);
   if (record === null || record.pending) return;
+  const action = alternative ? record.alternative : { label: record.confirmLabel, run: record.confirm };
+  if (action === undefined) return;
   feedback.set({ confirmation: { ...record, pending: true } });
   releaseConfirmationOwner(record);
   log(record.scope, `Confirmed: ${record.title}`, "action");
   try {
-    await record.confirm();
+    const message = await action.run();
+    if (typeof message === "string") {
+      const current = currentConfirmation(id, version);
+      if (current !== null) feedback.set({ confirmation: { ...current, message, pending: false } });
+      return;
+    }
     if (removeConfirmation(record)) resolveProblem(`${id}:failure`);
   } catch (error) {
     if (removeConfirmation(record) && !(error instanceof DOMException && error.name === "AbortError")) reportProblem({
       id: `${id}:failure`, level: "error", scope: record.scope,
-      title: `${record.confirmLabel} failed`, message: error instanceof Error ? error.message : String(error),
+      title: `${action.label} failed`, message: error instanceof Error ? error.message : String(error),
     });
   }
 }

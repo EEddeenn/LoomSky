@@ -1,4 +1,4 @@
-export { commitFieldDraft, commitFieldInputs, discardDraftsAt, discardFieldDraft, draftCount, draftIssues, draftText, fieldDraft, replaceDraftsAt, setFieldDraft, subscribeDrafts } from "./editing/drafts";
+export { commitFieldDraft, commitFieldInputs, discardDraftsAt, discardFieldDraft, draftCount, draftIssues, draftText, fieldDraft, prepareFieldInputs, publishFieldChanges, replaceDraftsAt, setFieldDraft, subscribeDrafts, writeFieldChanges } from "./editing/drafts";
 export { EditingSession } from "./editing/session";
 export { prepareFieldDraft, type DraftCodec } from "./editing/codecs";
 export { bindDocumentDispatch, dispatchDocumentTransaction } from "./editing/dispatch";

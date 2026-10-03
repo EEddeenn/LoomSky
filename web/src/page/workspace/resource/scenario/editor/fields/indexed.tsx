@@ -1,22 +1,15 @@
 "use client";
 
-import { useEffect, useId, type ReactNode } from "react";
-import { diagnosticsAt, isJsonNumberLiteral, pathKey, type WriteChange } from "@/model/document";
+import { useId, type ReactNode } from "react";
+import { diagnosticsAt, pathKey, type WriteChange } from "@/model/document";
 import type { ScenarioDoc } from "@/workbench/documents/scenario";
 import { listOf, useStore } from "@/core";
 import type { Path } from "@/model/schema";
-import { feedback, openProblems, reportProblem, resolveProblem } from "@/workbench/feedback";
-import { useProblem } from "@/page/shared/feedback";
-import { Button, FeedbackIcon } from "@/page/shared/ui";
+import { Button } from "@/page/shared/ui";
 import { Field, inputClass, Messages, NumberInput } from "@/page/shared/documents/editor";
 import { editPublication, useIndexedSelection } from "@/workbench/documents/scenario/editing";
+import { integerInRange } from "@/workbench/documents/scenario/editing/session";
 import { runDocumentEdit } from "@/workbench/documents/editing";
-
-function integerInRange(raw: string, min?: number, max?: number): boolean {
-  const value = Number(raw);
-  return isJsonNumberLiteral(raw) && Number.isSafeInteger(value)
-    && (min === undefined || value >= min) && (max === undefined || value <= max);
-}
 
 export function useTable(doc: ScenarioDoc, path: Path, allowSingleton = false) {
   const rowsOf = (value: unknown) => Array.isArray(value) ? value : allowSingleton ? listOf(value) : [];
@@ -26,11 +19,10 @@ export function useTable(doc: ScenarioDoc, path: Path, allowSingleton = false) {
   const saved = useStore(doc.editing.tables, (state) => state.entries[key]);
   const [selected, setSelected] = useIndexedSelection(doc, path, rows.length);
   const indices = (current: unknown[]) => [...selected].filter((index) => index >= 0 && index < current.length).sort((a, b) => a - b);
-  const apply = (changes: (current: unknown[]) => WriteChange[] | null, input?: "batch" | "paste") => {
+  const apply = (changes: (current: unknown[]) => WriteChange[] | null) => {
     const operation = () => {
       let applied = false;
       const success = runDocumentEdit({ kind: "scenario", id: doc.id }, () => editPublication(doc, () => {
-        if (input !== undefined && doc.editing.tableConflict(path) !== null) return [];
         const edits = changes(rowsOf(doc.editor.value(path)));
         if (edits === null || edits.length === 0) return [];
         applied = true;
@@ -38,10 +30,11 @@ export function useTable(doc: ScenarioDoc, path: Path, allowSingleton = false) {
       }));
       return success && applied;
     };
-    return input === undefined ? operation() : doc.editing.applyTableInput(path, input, operation);
+    return operation();
   };
   return {
     rows, selected, setSelected, indices, apply, conflictCue,
+    applyInput: (input: "batch" | "paste") => runDocumentEdit({ kind: "scenario", id: doc.id }, () => doc.editing.applyTableInput(path, input)),
     batch: saved?.batch ?? "", paste: saved?.paste ?? "", conflict: saved?.conflict ?? null,
     column: saved?.qualityColumn ?? "",
     toggle(index: number, checked: boolean) {
@@ -66,11 +59,7 @@ export function TableControls({ doc, path, table, label, min, max, column, child
   const literal = column === undefined ? text : /^\d+$/.test(text) ? String(Number(text)) : "";
   const ready = column !== "" && integerInRange(literal, min, max);
   const invalid = column !== "" && table.batch.trim() !== "" && !ready;
-  const problem = `editor:${doc.id}:${pathKey(doc.kind, path)}:batch`;
-  useProblem(problem, invalid ? {
-    id: problem, level: "warning", scope: `Scenario · ${doc.id}`, title: `${label} not applied`,
-    message: `Use a whole number${min === undefined ? "" : ` from ${min}`}${max === undefined ? "" : min === undefined ? ` up to ${max}` : ` to ${max}`}.`, location: pathKey(doc.kind, path),
-  } : null);
+  const numberMessage = `Use a whole number${min === undefined ? "" : ` from ${min}`}${max === undefined ? "" : min === undefined ? ` up to ${max}` : ` to ${max}`}.`;
   return <div className="flex min-w-0 flex-col gap-2 rounded-key bg-face p-2">
     {table.conflict === null ? null : <div className="flex flex-wrap items-center gap-2 text-small text-warn-ink">
       <p id={conflictCue} role="alert" className="m-0">{table.conflict}</p>
@@ -84,13 +73,11 @@ export function TableControls({ doc, path, table, label, min, max, column, child
     {children}
     <div className="flex min-w-0 items-center gap-2">
       <input aria-label={`${label} batch value`} aria-invalid={invalid || table.conflict !== null} aria-describedby={table.conflict !== null ? conflictCue : invalid ? cue : undefined} inputMode="numeric" className={`${inputClass(invalid || table.conflict !== null ? "warn" : null, true)} min-w-0 flex-1`} value={table.batch} onChange={(event) => doc.editing.setTable(path, { batch: event.target.value })} placeholder="Value" />
-      <Button size="xs" disabled={!ready || table.selected.size === 0 || table.conflict !== null}
-        onClick={() => table.apply((current) => table.indices(current).map((index) => ({ path: column === undefined ? [...path, index] : [...path, index, column], number: literal })), "batch")}
+      <Button size="xs" disabled={!ready || table.selected.size === 0}
+        onClick={() => table.applyInput("batch")}
       >Apply to {table.selected.size}</Button>
     </div>
-    {invalid ? <button id={cue} type="button" className="inline-flex self-start items-center gap-1 text-small text-warn-ink" onClick={() => openProblems(problem)}>
-      <FeedbackIcon level="warning" size={14} /><span className="underline underline-offset-3">Not applied</span>
-    </button> : null}
+    {invalid ? <p id={cue} className="m-0 text-small text-warn-ink">{numberMessage}</p> : null}
   </div>;
 }
 
@@ -110,10 +97,7 @@ export function IndexedTable({ doc, path, label, count, firstIndex = 1, min, max
   const tokens = paste.trim().split(/[\s,]+/).filter(Boolean);
   const pasteIndices = (current: unknown[]) => selected.size > 0 ? table.indices(current) : current.map((_, index) => index);
   const invalidValues = tokens.some((token) => !integerInRange(token, min, max));
-  const invalidPaste = tokens.length !== pasteIndices(rows).length || invalidValues;
-  const pasteProblem = `editor:${doc.id}:${pathKey(doc.kind, path)}:paste`;
-  const pasteFailed = useStore(feedback, (state) => state.problems.some((problem) => problem.id === pasteProblem));
-  useEffect(() => { if (!invalidPaste || paste === "") resolveProblem(pasteProblem); }, [pasteProblem, invalidPaste, paste]);
+  const invalidPaste = paste !== "" && (tokens.length !== pasteIndices(rows).length || invalidValues);
   return <Field label={label} path={pathKey(doc.kind, path)}>
     <TableControls doc={doc} path={path} table={table} label={label} min={min} max={max} />
     {count !== undefined && rows.length !== count ? <div>
@@ -144,22 +128,11 @@ export function IndexedTable({ doc, path, label, count, firstIndex = 1, min, max
       <summary className="cursor-pointer text-small text-ink2">Paste values</summary>
       <div className="mt-2 flex flex-col gap-2">
         <p className="m-0 text-small text-ink3">Paste {pasteIndices(rows).length} values in row order{selected.size > 0 ? " for selected entries" : ""}.</p>
-        <textarea aria-label={`Paste ${label}`} aria-invalid={conflict !== null || pasteFailed && invalidPaste} aria-describedby={conflict !== null ? conflictCue : pasteFailed && invalidPaste ? pasteCue : undefined}
-          className={`${inputClass(conflict !== null || pasteFailed && invalidPaste ? "warn" : null, true)} h-20 p-2`} value={paste}
+        <textarea aria-label={`Paste ${label}`} aria-invalid={conflict !== null || invalidPaste} aria-describedby={conflict !== null ? conflictCue : invalidPaste ? pasteCue : undefined}
+          className={`${inputClass(conflict !== null || invalidPaste ? "warn" : null, true)} h-20 p-2`} value={paste}
           onChange={(event) => doc.editing.setTable(path, { paste: event.target.value })} placeholder="Tab, comma or newline separated values" />
-        <Button size="xs" disabled={conflict !== null || tokens.length === 0 || invalidPaste} onClick={() => table.apply((current) => {
-          const indices = pasteIndices(current);
-          if (tokens.length !== indices.length || invalidValues) {
-            reportProblem({ id: pasteProblem, level: "warning", scope: `Scenario · ${doc.id}`, title: `Pasted ${label} not applied`,
-              message: `Paste ${indices.length} whole numbers${min === undefined ? "" : ` from ${min}`}${max === undefined ? "" : min === undefined ? ` up to ${max}` : ` to ${max}`}.`, location: pathKey(doc.kind, path) });
-            openProblems(pasteProblem);
-            return null;
-          }
-          return indices.map((index, i) => ({ path: [...path, index], number: tokens[i]! }));
-        }, "paste")}>Apply</Button>
-        {pasteFailed && invalidPaste ? <button id={pasteCue} type="button" className="inline-flex self-start items-center gap-1 text-small text-warn-ink" onClick={() => openProblems(pasteProblem)}>
-          <FeedbackIcon level="warning" size={14} /><span className="underline underline-offset-3">Not applied</span>
-        </button> : null}
+        <Button size="xs" disabled={tokens.length === 0 || invalidPaste} onClick={() => table.applyInput("paste")}>Apply</Button>
+        {invalidPaste ? <p id={pasteCue} className="m-0 text-small text-warn-ink">Paste {pasteIndices(rows).length} whole numbers in row order{min === undefined ? "" : `, from ${min}`}{max === undefined ? "" : ` to ${max}`}.</p> : null}
       </div>
     </details>
     <Messages doc={doc.editor} diagnostics={diagnosticsAt(doc.editor, path, "self")} />

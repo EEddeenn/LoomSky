@@ -13,7 +13,7 @@ import { EffectivePanel } from "./effective";
 
 export function HostPreview({ host }: { host: Host }) {
   const { session, frame } = useHostPreviewSession(host);
-  const viewport = usePreviewView(session);
+  usePreviewView(session);
   return (
     <ScrollArea pane="preview" className="flex flex-col">
       <div className="flex items-start gap-2 border-b border-line bg-panel px-5 py-3 text-small text-ink2">
@@ -23,7 +23,7 @@ export function HostPreview({ host }: { host: Host }) {
           {frame.note === null ? null : <span className="mt-1 block text-warn-ink">{frame.note.message}</span>}
         </span>
       </div>
-      <div className="relative grid min-h-80 flex-1"><PreviewMap frame={frame} session={session} viewport={viewport} /></div>
+      <div className="relative grid min-h-80 flex-1"><PreviewMap frame={frame} session={session} /></div>
       <Band frame={frame} onSeek={session.seek} onSelect={session.select} onCommand={(selection) => {
         session.select(selection);
         const command = page.get().command;

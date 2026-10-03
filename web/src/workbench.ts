@@ -18,6 +18,7 @@ import { startTheme } from "./workbench/theme";
 import { startOperations } from "./workbench/operations/state";
 import { clearArtifactCache } from "./workbench/documents/builds/artifacts";
 import { stopSavedBuilds } from "./workbench/documents/builds";
+import { confirmDocumentLeave } from "./workbench/documents/leaving";
 
 export function startWorkbench(): () => void {
   const stopCompute = startCompute();
@@ -33,7 +34,7 @@ export function startWorkbench(): () => void {
     : resource.kind === "scenario" ? scenarioCatalog.get().entries.get(resource.id)?.head.id ?? null
       : resource.kind === "trajectory" ? trajectoryCatalog.get().entries.get(resource.id)?.head.id ?? null
         : libraryFileOf(resource.id)?.id ?? null);
-  const stopRouting = startRouting();
+  const stopRouting = startRouting(confirmDocumentLeave);
   const stopBrowse = startLibraryBrowse();
   const stopClock = startClock();
   const scenarioRuntime = startScenarios();

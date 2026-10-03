@@ -98,9 +98,9 @@ configuration dialog keeps the host strip and Stop all available.
 | **Start** | Live or Replay, as below |
 | **Gain** | a finite value in dB, no greater than the displayed host maximum; the saved gain is offered when available |
 
-Choosing a version uses its saved contents. The picker identifies an
-unsaved working copy as **Save first**; open its editor and save to make
-those edits available. Resolve any scenario errors in
+Choosing a version uses its saved contents. The picker lists saved versions;
+save edits in the editor to make them available. Browsing does not start a
+build; **Use vN** prepares the selected version. Resolve any scenario errors in
 [the scenario editor](scenarios.md). A run already on the host continues
 with its submitted version and build when the working copy changes.
 

@@ -1,12 +1,12 @@
 import type { PendingIssue, Prepared } from "@/model/document";
-import type { ResourceKind, ResourceHead, SavedVersion } from "@/model/version";
+import type { ResourceKind, SavedVersion } from "@/model/version";
 import { reportPendingIssue, type EditTarget } from "./editing";
 import { captureAttention, hasAttention, navigate, resourceRemoved, type AttentionToken, type Destination } from "@/workbench/navigation";
 import { reportProblem, requestConfirmation, resolveProblem, toast } from "@/workbench/feedback";
 import { operationSourceKey } from "@/workbench/operations";
 
 type ActionDocument<S, K extends ResourceKind = ResourceKind> = { id: string; kind: K; name: string; workingSnapshot: S; workingSequence: number; pending: boolean;
-  editor: { writable(): boolean }; saved: { head: ResourceHead; version: SavedVersion; dirty: boolean }; prepareSnapshot(): PendingIssue | null };
+  editor: { writable(): boolean }; saved: { version: SavedVersion; dirty: boolean }; prepareSnapshot(): PendingIssue | null };
 export function ready<T>(target: EditTarget, result: Prepared<T>, attention: AttentionToken, focus = true): T | null {
   if (result.ok) return result.value;
   reportPendingIssue(target, result.issue, attention, focus);
@@ -29,21 +29,18 @@ export function captureOperation<S, K extends ResourceKind>(doc: ActionDocument<
     return null;
   }
 }
-export function confirmArchive(doc: ActionDocument<unknown>, archive: (id: string) => Promise<void>, retained: string): boolean {
+export function confirmDelete(doc: ActionDocument<unknown>, remove: (id: string) => Promise<void>): boolean {
   if (!doc.editor.writable()) return false;
   const sequence = doc.workingSequence;
-  const revision = doc.saved.head.revision;
   requestConfirmation({
-    id: `delete-${doc.kind}:${doc.id}`, scope: `${doc.kind} · ${doc.name}`, title: `Archive ${doc.kind}?`,
-    message: `Archive this ${doc.kind} and discard its unsaved working copy. ${retained}`,
-    details: [{ label: "Name", value: doc.name }, { label: "Saved version", value: `v${doc.saved.version.number}` },
-      { label: "Unsaved changes", value: doc.saved.dirty ? "Yes" : "None" }, { label: "Unapplied edits", value: doc.pending ? "Yes" : "None" }],
-    confirmLabel: `Archive ${doc.kind}`,
+    id: `delete-${doc.kind}:${doc.id}`, scope: `${doc.kind} · ${doc.name}`, title: `Delete ${doc.kind}?`,
+    message: `Delete “${doc.name}” and all its saved versions? This cannot be undone.`,
+    confirmLabel: `Delete ${doc.kind}`,
     confirm: async () => {
-      if (!doc.editor.writable() || doc.workingSequence !== sequence || doc.saved.head.revision !== revision) throw new Error("Working copy changed. Review it and choose Archive again.");
-      await archive(doc.id);
+      if (!doc.editor.writable() || doc.workingSequence !== sequence) throw new Error("Working copy changed. Review it and choose Delete again.");
+      await remove(doc.id);
       resourceRemoved({ kind: doc.kind, id: doc.id }, doc.id);
-      toast(`Archived ${doc.kind} ${doc.name}`);
+      toast(`Deleted ${doc.kind} ${doc.name}`);
       resolveProblem(`operation:${doc.kind}:${doc.id}:delete-${doc.kind}`);
     },
   });

@@ -1,10 +1,9 @@
 import { isolateHistory } from "@codemirror/commands";
 import type { Transaction, TransactionSpec } from "@codemirror/state";
-import { fieldKey, fieldReference, resolveField, writeTransaction, type DraftIssue, type FieldReference, type PendingIssue, type Prepared, type TextDocument, type WriteChange } from "@/model/document";
+import { DocumentText, fieldKey, fieldReference, resolveField, writeTransaction, type DraftIssue, type FieldReference, type PendingIssue, type Prepared, type TextDocument, type WriteChange } from "@/model/document";
 import { prepareFieldDraft, type DraftBinding } from "./codecs";
 
 type Entry = DraftBinding & { ref: FieldReference; text: string; base: string | undefined; guards: { depth: number; value: string }[] };
-export type FieldDraftCheckpoint = Omit<Entry, "base"> & { base: string | null };
 type Registry = { entries: Map<string, Entry>; listeners: Set<() => void> };
 const registries = new WeakMap<TextDocument, Registry>();
 
@@ -27,23 +26,6 @@ export function subscribeDrafts(doc: TextDocument, listener: () => void): () => 
   return () => state.listeners.delete(listener);
 }
 
-export function checkpointDrafts(doc: TextDocument): FieldDraftCheckpoint[] {
-  return structuredClone([...registries.get(doc)?.entries.values() ?? []].map((entry) => ({ ...entry, base: entry.base ?? null })));
-}
-
-export function restoreDrafts(doc: TextDocument, checkpoint: readonly FieldDraftCheckpoint[]): void {
-  const entries = new Map<string, Entry>();
-  for (const saved of structuredClone(checkpoint)) {
-    const entry = { ...saved, base: saved.base ?? undefined };
-    const key = fieldKey(entry.ref);
-    if (entries.has(key)) throw new Error("The draft contains duplicate field inputs");
-    entries.set(key, entry);
-  }
-  const state = registry(doc);
-  state.entries = entries;
-  notify(state);
-}
-
 export function fieldDraft(doc: TextDocument, ref: FieldReference): Readonly<Entry> | undefined {
   return registries.get(doc)?.entries.get(fieldKey(ref));
 }
@@ -52,7 +34,7 @@ export function draftText(doc: TextDocument, path: (string | number)[]): string 
   return fieldDraft(doc, fieldReference(doc, path))?.text;
 }
 
-function guardsFor(doc: TextDocument, path: (string | number)[], ref: FieldReference): Entry["guards"] {
+function guardsFor(doc: Pick<TextDocument, "value">, path: (string | number)[], ref: FieldReference): Entry["guards"] {
   return path.flatMap((part, depth) => {
     if (typeof part !== "number" || ref.kind === "entity" && depth === ref.collection.length) return [];
     const value = doc.value(path.slice(0, depth));
@@ -100,6 +82,74 @@ export function discardDraftsAt(doc: TextDocument, path: readonly (string | numb
   if (removeEntries(doc, state, path)) notify(state);
 }
 
+function containsPath(parent: readonly (string | number)[], path: readonly (string | number)[]): boolean {
+  return parent.length <= path.length && parent.every((part, index) => path[index] === part);
+}
+
+/** Publish a form edit without committing inputs from unrelated fields. */
+export function publishFieldChanges(doc: TextDocument, transaction: Transaction | null, changes?: readonly WriteChange[]): void {
+  if (!doc.writable()) return;
+  if (transaction !== null && transaction.startState !== doc.state()) throw new Error("Document changed. Retry this edit.");
+  const state = registries.get(doc);
+  const inputs = state !== undefined && state.entries.size > 0;
+  if (inputs) {
+    const after = transaction === null ? doc : new DocumentText(transaction.state);
+    const retained = new Map<string, Entry>();
+    for (const entry of state.entries.values()) {
+      const original = resolveField(doc, entry.ref);
+      if (original === null || changes === undefined && entry.ref.kind === "path"
+        && entry.guards.some((guard) => JSON.stringify(after.value(original.slice(0, guard.depth))) !== guard.value)) {
+        retained.set(fieldKey(entry.ref), entry);
+        continue;
+      }
+      let path: (string | number)[] | null = [...original];
+      for (const change of changes ?? []) {
+        if (path === null) break;
+        const parent = change.path.slice(0, -1);
+        const index = change.path.at(-1);
+        const insertion = change.insert === true;
+        const removal = change.value === undefined && change.number === undefined && change.json === undefined;
+        if (typeof index === "number" && (insertion || removal) && containsPath(parent, path) && typeof path[parent.length] === "number") {
+          const row = path[parent.length] as number;
+          if (removal && row === index) path = null;
+          else if (row >= index) path = [...parent, row + (insertion ? 1 : -1), ...path.slice(parent.length + 1)];
+        } else if (containsPath(change.path, path) || containsPath(path, change.path)) {
+          const beforeValue = doc.value(change.path);
+          const afterValue = after.value(change.path);
+          if (containsPath(change.path, path) && beforeValue !== undefined && !Array.isArray(beforeValue)
+            && Array.isArray(afterValue) && JSON.stringify(afterValue[0]) === JSON.stringify(beforeValue)) {
+            path = [...change.path, 0, ...path.slice(change.path.length)];
+          } else {
+            const next: (string | number)[] | null = entry.ref.kind === "entity" && change.path.length < path.length && containsPath(change.path, path)
+              ? resolveField(after, entry.ref) : null;
+            path = next !== null && doc.raw(original) === after.raw(next) ? next : null;
+          }
+        }
+      }
+      if (changes === undefined) {
+        path = resolveField(after, entry.ref);
+        if (path !== null && doc.raw(original) !== after.raw(path)) path = null;
+      }
+      if (path === null) continue;
+      const ref = fieldReference(after, path);
+      const current = doc.raw(original) === entry.base
+        && entry.guards.every((guard) => JSON.stringify(doc.value(original.slice(0, guard.depth))) === guard.value);
+      retained.set(fieldKey(ref), { ...entry, path, ref, ...(current ? { guards: guardsFor(after, path, ref) } : {}) });
+    }
+    state.entries = retained;
+  }
+  if (transaction !== null) doc.publishTransaction(transaction);
+  if (inputs) notify(state);
+}
+
+export function writeFieldChanges(doc: TextDocument, changes: readonly WriteChange[], metadata: TransactionSpec = {}): void {
+  if (!doc.writable()) return;
+  const spec = writeTransaction(doc.text(), changes);
+  const transaction = spec === null && metadata.effects === undefined && metadata.changes === undefined
+    ? null : doc.prepareTransaction({ ...spec, ...metadata });
+  publishFieldChanges(doc, transaction, changes);
+}
+
 export function hasDrafts(doc: TextDocument): boolean { return draftCount(doc) > 0; }
 export function draftCount(doc: TextDocument): number { return registries.get(doc)?.entries.size ?? 0; }
 
@@ -130,7 +180,7 @@ function prepareWrites(doc: TextDocument, ref: FieldReference, changes: readonly
   if (!doc.writable()) return { issue: { ref, path, message: "This document is read-only." } };
   try {
     const spec = changes.length === 0 ? null : writeTransaction(doc.text(), changes);
-    if (spec === null && metadata.effects === undefined) return { transaction: null };
+    if (spec === null && metadata.effects === undefined && metadata.changes === undefined) return { transaction: null };
     const transaction = doc.prepareTransaction({ ...spec, ...metadata, userEvent: "input.form", annotations: isolateHistory.of("full") });
     if (transaction !== null) return { transaction };
     return { issue: { ref, path, message: "This document is read-only." } };
@@ -140,24 +190,28 @@ function prepareWrites(doc: TextDocument, ref: FieldReference, changes: readonly
 }
 
 export function replaceDraftsAt(doc: TextDocument, path: (string | number)[], value: unknown): Prepared<void> {
-  const prepared = prepareWrites(doc, fieldReference(doc, path), [{ path, value }]);
+  const changes = [{ path, value }];
+  const prepared = prepareWrites(doc, fieldReference(doc, path), changes);
   if ("issue" in prepared) return { ok: false, issue: { kind: "field", issue: prepared.issue } };
-  const state = registry(doc);
-  const removed = removeEntries(doc, state, path);
-  if (prepared.transaction !== null) doc.publishTransaction(prepared.transaction);
-  if (removed) notify(state);
+  publishFieldChanges(doc, prepared.transaction, changes);
   return { ok: true, value: undefined };
 }
 
-export function commitFieldInputs(doc: TextDocument, metadata: TransactionSpec = {}, committed?: () => void): PendingIssue | null {
-  const state = registry(doc);
+export function prepareFieldInputs(doc: TextDocument): Prepared<readonly WriteChange[]> {
   const changes: WriteChange[] = [];
-  for (const entry of state.entries.values()) {
+  for (const entry of registries.get(doc)?.entries.values() ?? []) {
     const result = prepareEntry(doc, entry);
-    if ("issue" in result) return { kind: "field", issue: result.issue };
+    if ("issue" in result) return { ok: false, issue: { kind: "field", issue: result.issue } };
     changes.push(...result.changes);
   }
-  const prepared = prepareWrites(doc, { kind: "path", path: [] }, changes, metadata);
+  return { ok: true, value: changes };
+}
+
+export function commitFieldInputs(doc: TextDocument, metadata: TransactionSpec = {}, committed?: () => void, additionalChanges: readonly WriteChange[] = []): PendingIssue | null {
+  const inputs = prepareFieldInputs(doc);
+  if (!inputs.ok) return inputs.issue;
+  const state = registry(doc);
+  const prepared = prepareWrites(doc, { kind: "path", path: [] }, [...inputs.value, ...additionalChanges], metadata);
   if ("issue" in prepared) return { kind: "field", issue: prepared.issue };
   const removed = state.entries.size > 0;
   state.entries.clear();
@@ -177,7 +231,8 @@ export function commitFieldDraft(doc: TextDocument, ref: FieldReference): DraftI
   const prepared = prepareWrites(doc, ref, result.changes);
   if ("issue" in prepared) return prepared.issue;
   state.entries.delete(key);
-  if (prepared.transaction !== null) doc.publishTransaction(prepared.transaction);
-  notify(state);
+  const last = state.entries.size === 0;
+  publishFieldChanges(doc, prepared.transaction, result.changes);
+  if (last) notify(state);
   return null;
 }

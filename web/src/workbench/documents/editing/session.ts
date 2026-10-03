@@ -1,10 +1,8 @@
 import { EditorState, type Extension, type Transaction, type TransactionSpec } from "@codemirror/state";
-import { DocumentText, parseError, writeTransaction, type DocumentDiagnostic, type DocumentKind, type TextDocument, type WriteChange } from "@/model/document";
+import { DocumentText, type DocumentDiagnostic, type DocumentKind, type TextDocument, type WriteChange } from "@/model/document";
 import type { JSONPath } from "jsonc-parser";
 import { dispatchDocumentTransaction } from "./dispatch";
-import { checkpointDrafts, discardDraftsAt, hasDrafts, restoreDrafts, subscribeDrafts, type FieldDraftCheckpoint } from "./drafts";
-
-export type EditingCheckpoint = Readonly<{ fields: readonly FieldDraftCheckpoint[] }>;
+import { discardDraftsAt, hasDrafts, subscribeDrafts, writeFieldChanges } from "./drafts";
 
 export class EditingSession {
   private readonly document: TextDocument;
@@ -25,9 +23,6 @@ export class EditingSession {
   protected changed(): void {
     for (const listener of this.inputListeners) listener();
   }
-
-  checkpoint(): EditingCheckpoint { return { fields: checkpointDrafts(this.document) }; }
-  restoreCheckpoint(checkpoint: EditingCheckpoint): void { restoreDrafts(this.document, checkpoint.fields); }
 
   reconcile(): void {}
   leaveView(): void {}
@@ -67,11 +62,11 @@ export class DocumentEditor implements TextDocument {
   value(path: JSONPath): unknown { return this.source.value(path); }
   raw(path: JSONPath): string | undefined { return this.source.raw(path); }
   range(path: JSONPath): { from: number; to: number } | null { return this.source.range(path); }
-  broken(): { line: number; column: number } | null { return parseError(this.text()); }
+  broken(): { line: number; column: number } | null { return this.source.broken(); }
 
   reset(text: string, extensions: Extension = this.extensions, revision = this.revision + 1): void {
     this.extensions = extensions;
-    this.source = new DocumentText(text, extensions);
+    this.source = new DocumentText(text, extensions, this.source);
     this.revision = revision;
     this.clearEvaluation();
   }
@@ -86,8 +81,7 @@ export class DocumentEditor implements TextDocument {
   }
 
   writeMany(changes: readonly WriteChange[]): void {
-    const transaction = writeTransaction(this.text(), changes);
-    if (transaction !== null) this.apply(transaction);
+    writeFieldChanges(this, changes);
   }
 
   prepareTransaction(spec: TransactionSpec): Transaction | null {
@@ -112,7 +106,7 @@ export class DocumentEditor implements TextDocument {
     const before = this.state();
     const changed = !before.doc.eq(state.doc) || this.owner.significant(before, state);
     if (!this.writable() && changed) return;
-    this.source = new DocumentText(state);
+    this.source = new DocumentText(state, [], this.source);
     if (changed) {
       this.revision++;
       this.owner.changed(before, state);

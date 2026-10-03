@@ -22,7 +22,9 @@ export type Confirmation = {
   message: string;
   details?: readonly { label: string; value: string }[];
   confirmLabel: string;
-  confirm(): void | Promise<void>;
+  // A returned message keeps the choice open when the action cannot finish.
+  confirm(): void | string | Promise<void | string>;
+  alternative?: { label: string; run(): void | Promise<void> };
 };
 export type ConfirmationRecord = Confirmation & { version: number; pending: boolean };
 

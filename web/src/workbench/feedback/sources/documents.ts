@@ -4,7 +4,7 @@ import { discardFieldDraft, draftIssues, fieldDraft } from "@/workbench/document
 import { gpsClock, gpsDate } from "@/model/gnss";
 import { scenarioCatalog, scenarioDocuments, loadScenarioCatalog } from "@/workbench/documents/scenario";
 import { loadSchemas, schemas } from "@/workbench/schemas";
-import { navigate, revealDocument } from "@/workbench/navigation";
+import { revealDocument } from "@/workbench/navigation";
 import { replaceProblems, type Problem } from "@/workbench/feedback";
 import { loadTrajectoryCatalog, trajectoryCatalog, trajectoryDocuments } from "@/workbench/documents/trajectory";
 import { saveDocument } from "@/workbench/documents/versions";
@@ -89,11 +89,9 @@ export function startDocumentProblems(): () => void {
       const message = doc.saved.issue;
       if (message !== null) {
         const problem: Problem = { id: `document:${kind}:${id}:save`, level: "error", scope,
-          title: doc.saved.state.status === "conflict" ? `${label} version conflict` : `Cannot save ${label}`, message,
+          title: `Cannot save ${label}`, message,
         };
-        problems.push(doc.saved.state.status === "conflict" ? { ...problem,
-          actions: [{ id: `open-${kind}`, label: `Open ${kind}`, run: () => navigate({ workspace: "resource", kind, id }) }],
-        } : retryProblem(problem, async () => {
+        problems.push(retryProblem(problem, async () => {
           const current = kind === "scenario" ? scenarioDocuments.get().docs.get(id) : trajectoryDocuments.get().docs.get(id);
           if (current === doc) await saveDocument(doc);
         }, doc.saved.state.status === "saving"));
@@ -138,7 +136,16 @@ export function startDocumentProblems(): () => void {
     replaceProblems("documents", problems);
   }
 
-  const unsubscribe = [scenarioDocuments.subscribe(update), trajectoryDocuments.subscribe(update), scenarioCatalog.subscribe(update), trajectoryCatalog.subscribe(update), schemas.subscribe(update)];
+  function subscribeCatalog(catalog: typeof scenarioCatalog): () => void {
+    let { error, loading } = catalog.get();
+    return catalog.subscribe(() => {
+      const current = catalog.get();
+      if (current.error === error && (current.error === null || current.loading === loading)) return;
+      ({ error, loading } = current);
+      update();
+    });
+  }
+  const unsubscribe = [scenarioDocuments.subscribe(update), trajectoryDocuments.subscribe(update), subscribeCatalog(scenarioCatalog), subscribeCatalog(trajectoryCatalog), schemas.subscribe(update)];
   update();
   return () => {
     stopped = true;

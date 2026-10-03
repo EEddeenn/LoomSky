@@ -112,7 +112,7 @@ export function hostProblems(now: number): Problem[] {
     const { cls, submission } = hostView(host, now);
     if (submission === null || !mayAir(cls) && cls !== "alarm") continue;
     const entry = scenarioCatalog.get().entries.get(submission.source.scenarioId);
-    if (entry === undefined || entry.head.archivedAt !== null || submission.source.versionId === entry.head.headVersionId && !entry.working?.dirty && !entry.working?.pending) continue;
+    if (entry === undefined || submission.source.versionId === entry.head.headVersionId && !entry.working?.dirty && !entry.working?.pending) continue;
     const rows = different.get(entry.head.id) ?? [];
     rows.push({ name: nameOf(host), version: submission.source.versionNumber });
     different.set(entry.head.id, rows);

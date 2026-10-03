@@ -14,7 +14,6 @@ import { stopHost } from "@/workbench/hosts/actions";
 import { captureAttention, navigate, openResource, type AttentionToken } from "@/workbench/navigation";
 import { openTransmit } from "@/workbench/transmit";
 import { libraryFileOf, renameLibraryFile } from "@/workbench/files";
-import { isOperationActive, useOperations } from "@/workbench/operations";
 
 import { reportProblem, resolveProblem } from "@/workbench/feedback";
 import { Button, closePopover, Popover, PopoverBody, PopoverFooter, PopoverHead, TextInput } from "@/page/shared/ui";
@@ -29,9 +28,6 @@ export function ResourceActions({ resource, name: resourceName, mode = "list", r
   const [renameRevision, setRenameRevision] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const working = useStore(scenarioCatalog, (state) => resource.kind === "scenario" ? state.entries.get(resource.id)?.working ?? null : null);
-  const operations = useOperations();
-  const active = operations.filter((operation) => operation.kind !== "import" && isOperationActive(operation)
-    && resourceKey(operation.resource) === resourceKey(resource));
   const host = resource.kind === "host" ? hostOf(resource.key) : undefined;
   const problemId = `library:action:${resourceKey(resource)}`;
   const action = async (run: () => unknown | Promise<unknown>, blocking = true) => {
@@ -80,13 +76,12 @@ export function ResourceActions({ resource, name: resourceName, mode = "list", r
       {host === undefined || !canStop(host, Date.now()) ? null : <Button size="xs" variant="danger" title={stopText(host) || "Stop transmission"} onClick={() => stopHost(host.key)}>Stop</Button>}
       <Button id={anchor} size="xs" variant="ghost" icon="dots" iconOnly aria-label={`Actions for ${resourceName}`} popoverTarget={menu} disabled={busy} />
       <Popover id={menu} anchor={anchor} width={210} role="menu" label={`Actions for ${resourceName}`}>
-        {active.length === 0 ? null : <p role="status" className="m-0 border-b border-line px-3 py-2 text-small text-ink3">{active.length} active {active.length === 1 ? "operation" : "operations"}</p>}
         {mode === "detail" ? null : item("Open", () => openResource(resource))}
         {resource.kind !== "scenario" ? null : (
           <>
             {item("Duplicate", () => withScenario(copyScenario), false, true)}
             {item("Export…", () => withScenario(downloadScenario), false, true)}
-            {item("Archive…", () => withScenario(removeScenario))}
+            {item("Delete…", () => withScenario(removeScenario))}
           </>
         )}
         {resource.kind !== "trajectory" ? null : (
@@ -94,7 +89,7 @@ export function ResourceActions({ resource, name: resourceName, mode = "list", r
             {item("Duplicate", () => withTrajectory((doc, attention) => copyTrajectory(doc, returnScenario, attention)), false, true)}
             {item("Export trajectory JSON", () => withTrajectory(downloadTrajectorySource), false, true)}
             {item("Export PHT", () => withTrajectory(downloadTrajectoryPht), false, true)}
-            {item("Archive…", () => withTrajectory(removeTrajectory))}
+            {item("Delete…", () => withTrajectory(removeTrajectory))}
           </>
         )}
         {resource.kind !== "file" ? null : (

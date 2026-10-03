@@ -13,36 +13,34 @@ Tabs using the same browser profile and page origin share saved resources,
 transmitter registrations, run records and basemap addresses. Committed
 changes notify the other tabs to refresh; returning to a tab also refreshes
 its stored state if a notification was missed. Each tab keeps its own
-current URL, map cameras and editing interaction.
+current URL and editing interaction.
 
 ## What survives reload
 
 | Stored in this browser | Contents |
 |---|---|
-| Resource heads | the latest saved version and whether a scenario or trajectory is archived |
+| Resource heads | the latest saved version of each scenario or trajectory |
 | Saved scenario versions | complete JSON, selected filename-to-content bindings and the chosen saved trajectory version/build |
 | Saved trajectory versions | complete Library name and Plan JSON |
 | Saved builds | source version, engine fingerprint, diagnostics and exact generated PHT or bundle identities |
-| Recovery drafts | checkpointed working content, selected inputs, unapplied fields, names, table input, drawings and range drafts |
 | Library data files | catalogue names, types, sizes and import times; contents stored by SHA-256 digest |
 | Transmitter registrations | addition order, address, token, name, last gain and last observed run summary |
 | Submitted runs | saved source version/build identity, frozen scenario and trajectory sources, exact PHT and inputs, bundle and resolved summary; recorded sent bounds and applied-command history when observed |
 | Recovery requests | pending submissions, requested cancellation and Stop targets |
 | Basemap addresses | archives that opened successfully and have not been removed |
 | Shared preferences | theme and map labels |
-| Tab preferences | workspace map cameras; these survive reload in the same tab |
 
 Documents, files, registrations, run records and basemap addresses use
-IndexedDB. Shared preferences use localStorage; workspace map cameras use
-sessionStorage for the current tab. The URL selects the page on reload;
+IndexedDB. Shared preferences use localStorage. Maps open fitted to the
+available track and editing geometry. The URL selects the page on reload;
 `/` always opens Home. A successful save means the storage transaction has
 completed; storage availability and retention remain controlled by the browser.
 
 | Kept only while the page remains open | Consequence of reload |
 |---|---|
-| Edits newer than the last successful recovery checkpoint | these may be lost; Save explicitly before leaving when the content must be retained |
+| Unsaved edits and unapplied inputs | these are lost; choose Save to keep document changes |
 | Working-copy checks, generated previews, packs and effective-value results | required results are checked or generated again when the document is opened or used |
-| Document undo/redo history | restored drafts start a new document edit history |
+| Document undo/redo history | reopening the page starts a new document edit history |
 | Background operation progress, active captured inputs and recent results | unfinished work and these records end; already saved imports or copies remain in Library |
 | Live host status and current communication state | monitoring reconnects; the last saved observation is only historical context |
 | Library search, sorting, selection, scroll and preview state | browsing state starts again |
@@ -58,49 +56,44 @@ has no fixed length or automatic pruning.
 
 Edits change a working copy in page memory. Choose **Save**, or press
 Ctrl+S / Cmd+S in the editor, to save a complete immutable version.
-New, imported and duplicated resources start at **v1**. Each changed Save
-appends the next version; saving unchanged content does not add a version.
+New, imported and duplicated resources start at **v1**. Each Save
+appends the next version.
 Automatic checking and trajectory generation run for the open editor.
 Leaving it releases temporary results; returning prepares them again.
 Operations prepare their captured sources separately. Library previews read
 saved versions and retained results without starting new checks or solves.
 
-The header shows the latest saved **vN**, **Unsaved changes**, any unapplied
-inputs, and **Saving…** or **Save failed** when relevant. **Saved** describes
-browser persistence; it does not say that checks passed. Save first applies
-still-pending fields and trajectory names together as one undo step.
-Correct or revert invalid or conflicting pending input before saving.
+The header shows the saved **vN** and one save state: **Saved**, **Unsaved**, **Saving…** or **Save failed**. Pending input counts as unsaved.
+**Saved** describes browser persistence; it does not say that checks passed.
+Save first prepares pending fields, the trajectory name, table batch/paste
+input, completed drawings and authored timeline ranges. Invalid, conflicting
+or incomplete input stays available and blocks saving until corrected or
+reverted. Finish or cancel an active drag before saving. The version cannot
+silently omit pending input.
+
 Invalid JSON already entered in the JSON editor can be saved as text, and a
 Plan or scenario that fails its checks can still have a saved version.
 
-Unfinished drawings, table batch/paste text and timeline range drafts wait
-for their explicit apply actions. Save excludes them from the saved version;
-draft recovery preserves them separately. The header can therefore
-show **Saved** alongside unapplied input. Finish or cancel a drag that edits
-the trajectory before saving.
-
-Switching resources, tabs or Form/JSON retains the working copy and pending
-inputs without saving; leaving the editor cancels an active drag. Reloading
-or closing the page asks for confirmation when any resource has unsaved
-work, including resources you have left.
-The same tab restores its last completed recovery draft on reopening the
-resource. A recent edit can still be newer than that checkpoint.
+Switching sections or Form/JSON within the same document keeps the working
+copy and pending inputs. Leaving an editor with unsaved work shows a small
+card at the bottom right: **Save and leave** saves the document before
+navigating; **Discard and leave** drops its unsaved edits and unapplied
+inputs. If saving fails, the same card stays open for retry or discard.
+Incomplete input remains in the editor for correction. Escape dismisses the
+card and keeps the editor open. Leaving also cancels an active drag. Reloading or closing the browser page uses the browser’s own unsaved
+changes warning. Unsaved editing state is not stored for recovery.
 
 Save finishes only after its storage transaction commits. Edits made while
 it is writing remain unsaved. If a save fails, the current edits remain in
 page memory. Open **Save failed** or the corresponding problem in Activity
-and retry. A conflicting save from another tab is reported instead of
-overwriting that tab's version.
+and retry. Each successful Save appends to the resource's saved history.
 
 A working copy without local edits or editing history loads a newer saved
 version from another tab automatically. Local edits, unapplied input, undo/redo
 history, an active gesture or a save in progress prevent that replacement.
-The notice offers **View versions**,
-**Load latest…** and **Save a copy**; loading the latest version asks you to
-review discarding local work. If the other tab archived the resource, the
-current working copy stays available with **Save a copy**, while ordinary
-Save is blocked. A stale rename or removal of a Library file also reports
-the changed record instead of overwriting it.
+Local work stays in the editor and can be saved as the next version.
+A stale rename or removal of a Library file reports the changed record
+instead of overwriting it.
 
 A failed Library load also has a problem with **Retry**; it does not mean
 the Library is empty.
@@ -110,9 +103,10 @@ whose editor schemas could not load offers **View editor loading
 problem**. Host monitoring continues while these editor problems are
 resolved.
 
-If another tab upgrades or replaces the browser database, LoomSky closes
-its old storage connection and asks you to reload before saving again. An
-upgrade blocked by an older open tab asks you to close that tab and retry.
+If another tab replaces the browser database, LoomSky closes its old storage
+connection and asks you to reload. The application creates the current schema
+for a new Library and opens existing Libraries in that format. Older formats
+are not migrated or cleared automatically.
 
 Imports enter Library only after their records and supplied bytes have
 been saved. Files are processed individually. A multi-file import can
@@ -131,34 +125,11 @@ scenario working copy. Save the scenario to retain that selection. The
 saved reference fixes the Plan source and exact PHT; a newer trajectory
 version does not update it automatically.
 
-## Draft recovery
-
-LoomSky checkpoints recoverable editing state in browser storage while you
-work. Recovery keeps the working source, selected file and trajectory
-inputs, unapplied fields and names, table text, unfinished drawings and
-timeline range input. It creates no saved version and does not apply
-pending text. Restoring a draft starts a new document undo/redo history.
-Generated previews are prepared again from their captured sources.
-
-The same tab remembers which recovery draft to reopen. In Library, choose
-**Recover drafts** to inspect stored drafts by resource and update time.
-**Restore** loads a selected draft into its working copy; **Discard** asks
-for confirmation before deleting that recovery entry. A restored draft is
-kept separately from its original entry, so recovery in another tab does
-not take over the original tab's edits. Choose **Save** when the recovered
-content should become a saved version.
-
-If draft storage fails, **Could not save recovery draft** keeps the
-working copy in the current tab and offers **Retry**. Keep
-that tab open until the problem is resolved or explicitly save/export the
-needed content. Recovery is asynchronous, so the newest keystrokes may not
-yet have a stored checkpoint. Browser data removal also removes drafts.
-
 ## Version history and restoration
 
 Open the header's **vN** control for **Version history**. Select **Working
 copy** to inspect current changes, or a saved version to inspect its
-source, changes, checks and dependencies. Every saved version remains
+source, changes and dependencies. Every saved version remains
 available; saving new content never replaces an earlier entry.
 
 **Restore working copy** loads a historical source into the editor.
@@ -177,7 +148,7 @@ earlier artifact with newly generated bytes. Reading a retained result
 uses its saved artifacts; it does not rebuild them with the current engine.
 A saved scenario keeps the exact trajectory build selected in that version.
 
-## File identities and archival
+## File identities and deletion
 
 A selected file has both a filename and a content digest. The filename is
 used by the scenario JSON; the digest selects the bytes. Importing or
@@ -192,20 +163,19 @@ it does not rename references already captured by scenarios or runs.
 |---|---|---|
 | Remove an input from a scenario | its reference and any binding no longer used by the scenario | Library entry and bytes; the prior selection remains in the current undo history |
 | Remove a Library data-file entry | catalogue metadata | stored bytes, existing scenario bindings and submitted snapshots |
-| Archive a scenario or trajectory | active Library entry and its unsaved working copy | every saved version, build, referenced byte and submitted run |
+| Delete a scenario or trajectory | Library entry, every saved version and build, and its unsaved working copy | shared stored file bytes; deletion is blocked while saved scenarios or pending/submitted runs use the resource |
 | Remove a transmitter registration | saved registration and its preferences | submitted-run records and outstanding recovery persistence work |
 
-A scenario can continue using a saved trajectory version after that
-trajectory is archived. Archival does not remove the version or its exact
-compiled PHT. Undo restores the JSON and selected inputs together for edits
-in the current page session. Recovery drafts retain the current source and
-inputs; saved version history remains available across reloads.
+Deletion is blocked when a saved scenario version uses the trajectory, or
+a pending transmission or submitted run uses the scenario. The failure
+identifies the reference that prevents deletion.
 
-Archive confirmation identifies unsaved work that will be discarded,
-including unapplied fields, names and scratch input.
-Archival changes the resource's stored visibility after outstanding work
-settles. If storage fails, the active document remains available and the
-failure is reported.
+Delete confirmation names the resource and states that deletion cannot be
+undone. Confirming deletes its saved versions and builds after
+outstanding work settles. Shared file bytes remain in browser storage. If
+storage fails, the active document remains available and the failure is
+reported. Undo restores JSON and selected inputs for ordinary edits in the
+current page session; it does not restore a deleted resource.
 
 Removing catalogue entries is not a way to erase every retained copy or
 recover all their storage space. Clearing the site's browser data removes
@@ -274,7 +244,7 @@ To restore it:
    imported Plan and wait for its current result to pass verification.
 4. Upload the navigation, antenna and precise-product files through
    **Import → Data file…**, or through their scenario pickers.
-5. In Setup, select the trajectory through **Choose from Library…** and
+5. In Setup, select the trajectory through **Choose…** and
    choose its saved **v1**, then **Use v1**. In Data, choose each
    named input explicitly.
 6. Review the restored scenario's checks and previews, then choose **Save**

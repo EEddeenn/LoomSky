@@ -50,13 +50,13 @@ function catalogSummary({ head, working }: DocumentCatalogEntry): ResourceSummar
   const summary = working?.summary ?? head.summary;
   const state = working?.saveState.status ?? "saved";
   const unsaved = working !== null && (working.dirty || working.pending);
-  const status = state === "conflict" ? "Saved version changed" : state === "error" ? "Not saved" : state === "saving" ? "Saving…" : unsaved ? "Unsaved changes" : "Saved";
+  const status = state === "error" ? "Not saved" : state === "saving" ? "Saving…" : unsaved ? "Unsaved changes" : "Saved";
   return {
     resource: { kind: head.kind, id: head.id }, name: summary.name,
     type: head.kind === "scenario" ? "Scenario" : "Trajectory",
     status,
     secondary: [`v${head.headVersionNumber}`, ...(unsaved && status !== "Unsaved changes" ? ["Unsaved changes"] : []), ...(summary.description === null ? [] : [summary.description])].join(" · "),
-    tone: state === "conflict" || state === "error" ? "error" : unsaved ? "warning" : "normal",
+    tone: state === "error" ? "error" : unsaved ? "warning" : "normal",
   };
 }
 
@@ -88,7 +88,7 @@ export function useLibraryEntries(): { entries: ResourceSummary[]; loading: bool
     for (const catalog of [scenarios, trajectories]) {
       for (const id of catalog.order) {
         const entry = catalog.entries.get(id);
-        if (entry !== undefined && entry.head.archivedAt === null) entries.push(catalogSummary(entry));
+        if (entry !== undefined) entries.push(catalogSummary(entry));
       }
     }
     for (const id of files.order) {

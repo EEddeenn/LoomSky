@@ -5,14 +5,14 @@ import { savedVersionName } from "@/model/version";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { TrajectoryRevision } from "@/model/trajectory";
 import { resolveTrajectoryBuild } from "@/workbench/documents/trajectory/builds";
-import type { BuildRecord, SavedVersion, ScenarioSnapshot, TrajectorySnapshot } from "@/model/version";
-import { Button, FeedbackIcon, Softkeys } from "../../ui";
+import type { SavedVersion, ScenarioSnapshot, TrajectorySnapshot } from "@/model/version";
+import { Button, Softkeys } from "../../ui";
 import { sourceDiff } from "./diff";
 import { savedTime, versionLabel } from "./format";
 
 type Snapshot = ScenarioSnapshot | TrajectorySnapshot;
 
-function TrajectoryLabel({ pin, details }: { pin: TrajectoryRevision; details: boolean }) {
+function TrajectoryLabel({ pin }: { pin: TrajectoryRevision }) {
   const [resolved, setResolved] = useState<Awaited<ReturnType<typeof resolveTrajectoryBuild>> | null>(null);
   const [failed, setFailed] = useState(false);
   const { versionId, buildId } = pin;
@@ -25,13 +25,11 @@ function TrajectoryLabel({ pin, details }: { pin: TrajectoryRevision; details: b
     return () => controller.abort();
   }, [versionId, buildId]);
   if (resolved === null) return <span className="text-ink3">{failed ? "Saved trajectory unavailable" : "Loading trajectory…"}</span>;
-  return <>{savedVersionName(resolved.version)} <span className="fn text-ink3">{versionLabel(resolved.version.number)}</span>
-    {details ? <span className="mt-0.5 block text-ink3">Fixed version · {resolved.record.artifacts.pht.name}</span> : null}
-  </>;
+  return <>{savedVersionName(resolved.version)} <span className="fn text-ink3">{versionLabel(resolved.version.number)}</span></>;
 }
 
-function trajectoryLabel(pin: TrajectoryRevision | null, details = false): ReactNode {
-  return pin === null ? "None" : <TrajectoryLabel key={`${pin.versionId}:${pin.buildId}`} pin={pin} details={details} />;
+function trajectoryLabel(pin: TrajectoryRevision | null): ReactNode {
+  return pin === null ? "None" : <TrajectoryLabel key={`${pin.versionId}:${pin.buildId}`} pin={pin} />;
 }
 
 function dependencyChanges(snapshot: Snapshot, previous: Snapshot): { label: string; before: ReactNode; after: ReactNode }[] {
@@ -45,7 +43,7 @@ function dependencyChanges(snapshot: Snapshot, previous: Snapshot): { label: str
     for (const name of names) {
       const a = Object.hasOwn(previous.bindings.files, name) ? previous.bindings.files[name] : undefined;
       const b = Object.hasOwn(snapshot.bindings.files, name) ? snapshot.bindings.files[name] : undefined;
-      if (a !== b) changes.push({ label: name, before: a === undefined ? "Not attached" : `File ${a.slice(0, 12)}`, after: b === undefined ? "Not attached" : `File ${b.slice(0, 12)}` });
+      if (a !== b) changes.push({ label: name, before: a === undefined ? "Not attached" : b === undefined ? "Attached" : "Previous content", after: b === undefined ? "Not attached" : a === undefined ? "Attached" : "Updated content" });
     }
   }
   return changes;
@@ -86,33 +84,20 @@ export function SnapshotChanges({ snapshot, previous, label }: { snapshot: Snaps
 function Dependencies({ snapshot }: { snapshot: Snapshot }) {
   if (!("bindings" in snapshot)) return null;
   const trajectory = snapshot.bindings.trajectory;
-  const files = Object.entries(snapshot.bindings.files);
+  const files = Object.keys(snapshot.bindings.files);
   return <section className="space-y-2" aria-label="Saved dependencies">
     <h3 className="m-0 text-body font-semibold">Dependencies</h3>
     <dl className="m-0 space-y-2 text-small">
-      <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-3"><dt className="text-ink3">Trajectory</dt><dd className="m-0 break-words">{trajectoryLabel(trajectory, true)}</dd></div>
-      {files.map(([name, digest]) => <div key={name} className="grid grid-cols-[100px_minmax(0,1fr)] gap-3"><dt className="text-ink3">Data file</dt><dd className="m-0 min-w-0"><span className="block break-words">{name}</span><span className="fn mt-0.5 block truncate text-ink3" title={digest}>{digest.slice(0, 16)}</span></dd></div>)}
+      <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-3"><dt className="text-ink3">Trajectory</dt><dd className="m-0 break-words">{trajectoryLabel(trajectory)}</dd></div>
+      {files.map((name) => <div key={name} className="grid grid-cols-[100px_minmax(0,1fr)] gap-3"><dt className="text-ink3">Data file</dt><dd className="m-0 break-words">{name}</dd></div>)}
       {files.length === 0 ? <div className="grid grid-cols-[100px_minmax(0,1fr)] gap-3"><dt className="text-ink3">Data files</dt><dd className="m-0 text-ink3">None</dd></div> : null}
     </dl>
   </section>;
 }
 
-function BuildDetails({ builds }: { builds: readonly BuildRecord[] }) {
-  if (builds.length === 0) return <section className="space-y-2"><h3 className="m-0 text-body font-semibold">Checks</h3><p className="m-0 text-small text-ink3">No saved check result.</p></section>;
-  return <section className="space-y-2" aria-label="Saved verification results">
-    <h3 className="m-0 text-body font-semibold">Checks</h3>
-    {builds.map((build, index) => <details key={build.id} open={index === 0} className="rounded-key bg-face px-3 py-2 ring-key">
-      <summary className="cursor-pointer text-small"><span className="ml-1 inline-flex items-center gap-1.5"><FeedbackIcon level={build.status === "success" ? "success" : "error"} size={13} /><span>{build.status === "success" ? "Verified" : "Check failed"}</span><time className="text-ink3" dateTime={new Date(build.created).toISOString()}>{savedTime(build.created, true)}</time></span></summary>
-      {build.diagnostics.length === 0 ? null : <ul className="mb-0 mt-2 list-none space-y-2 p-0">{build.diagnostics.map((diagnostic, i) => <li key={i} className="flex gap-2 text-small"><FeedbackIcon level={diagnostic.error ? "error" : "warning"} size={13} /><div className="min-w-0"><p className="m-0 break-words">{diagnostic.message}</p><span className="fn text-ink3">{diagnostic.file}{diagnostic.path ? ` · ${diagnostic.path}` : ""}</span></div></li>)}</ul>}
-      {Object.keys(build.artifacts).length === 0 ? null : <dl className="mb-0 mt-3 space-y-1 border-t border-line pt-2 text-small">{Object.entries(build.artifacts).map(([key, artifact]) => artifact === undefined ? null : <div key={key} className="flex min-w-0 gap-3"><dt className="w-14 flex-none uppercase text-ink3">{key}</dt><dd className="m-0 min-w-0 flex-1 truncate" title={artifact.digest}>{artifact.name}</dd></div>)}</dl>}
-    </details>)}
-  </section>;
-}
-
-export function VersionDetails({ version, previous = null, builds = [], history = [] }: {
+export function VersionDetails({ version, previous = null, history = [] }: {
   version: SavedVersion;
   previous?: SavedVersion | null;
-  builds?: readonly BuildRecord[];
   history?: readonly SavedVersion[];
 }) {
   const restored = history.find((candidate) => candidate.id === version.restoredFrom);
@@ -120,7 +105,6 @@ export function VersionDetails({ version, previous = null, builds = [], history 
     <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><h3 className="m-0 text-title font-semibold">{versionLabel(version.number)}</h3><p className="m-0 mt-1 break-words text-small text-ink2">{savedVersionName(version)}</p><time dateTime={new Date(version.savedAt).toISOString()} className="mt-1 block text-small text-ink3">Saved {savedTime(version.savedAt)}</time></div><span className="rounded-key bg-face px-2 py-0.5 text-small text-ink3">Read only</span></div>
     {version.note === undefined || version.note === "" ? null : <p className="m-0 whitespace-pre-wrap text-small text-ink2">{version.note}</p>}
     {version.restoredFrom === null ? null : <p className="m-0 text-small text-ink3">Restored from {restored === undefined ? "an earlier version" : versionLabel(restored.number)}.</p>}
-    <BuildDetails builds={builds.filter((build) => build.versionId === version.id)} />
     <Dependencies snapshot={version.snapshot} />
     <SnapshotChanges key={version.id} snapshot={version.snapshot} previous={previous?.snapshot ?? null} label={previous === null ? "Saved source" : `Changes from ${versionLabel(previous.number)}`} />
   </div>;

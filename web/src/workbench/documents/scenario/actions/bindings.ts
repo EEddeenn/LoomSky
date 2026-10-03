@@ -13,32 +13,19 @@ function current(doc: ScenarioDoc): void {
   if (peekScenario(doc.id) !== doc || !doc.editor.writable()) throw new Error("Scenario is no longer editable. Reopen it and choose again.");
 }
 
-function prepare(doc: ScenarioDoc, focus = true): boolean {
-  current(doc);
-  const issue = doc.prepareSnapshot();
-  if (issue === null) return true;
-  reportPendingIssue({ kind: "scenario", id: doc.id }, issue, captureAttention(), focus);
-  return false;
-}
-
 function snapshot(doc: ScenarioDoc, field: ScenarioFileField | "trajectory") {
   return {
-    sequence: doc.workingSequence,
     field,
     raw: doc.editor.raw(field.split(".")),
-    precise: field.startsWith("precise.") ? doc.editor.raw(["precise"]) : undefined,
-    files: doc.files,
-    trajectory: doc.trajectory,
+    trajectory: field === "trajectory" ? doc.trajectory : undefined,
   };
 }
 
-function unchanged(doc: ScenarioDoc, before: ReturnType<typeof snapshot>, revision = true): void {
+function unchanged(doc: ScenarioDoc, before: ReturnType<typeof snapshot>): void {
   current(doc);
-  if ((revision && (doc.workingSequence !== before.sequence))
-    || doc.editor.raw(before.field.split(".")) !== before.raw
-    || doc.files !== before.files || doc.trajectory !== before.trajectory
-    || (before.field.startsWith("precise.") && doc.editor.raw(["precise"]) !== before.precise)) {
-    throw new Error("Scenario changed. Close Library, review inputs and choose again.");
+  if (doc.editor.raw(before.field.split(".")) !== before.raw
+    || before.field === "trajectory" && doc.trajectory !== before.trajectory) {
+    throw new Error("This file reference changed. Choose it again.");
   }
 }
 
@@ -70,7 +57,7 @@ function namedFiles(records: readonly LibraryFileRecord[]): ScenarioFileSelectio
 }
 
 export function addScenarioFiles(doc: ScenarioDoc, field: ScenarioFileField, accept?: string): void {
-  let before = snapshot(doc, field);
+  const before = snapshot(doc, field);
   const multiple = field !== "antenna";
   openLibraryPicker({
     title: `Add ${field} files`, kinds: ["file"], multiple, fileAccept: accept, fileKinds: [fileKind(field)],
@@ -78,10 +65,6 @@ export function addScenarioFiles(doc: ScenarioDoc, field: ScenarioFileField, acc
       if (resources.length === 0) return false;
       if (!multiple && resources.length !== 1) throw new Error("Choose one antenna file.");
       unchanged(doc, before);
-      if (!prepare(doc, false)) return false;
-      unchanged(doc, before, false);
-      before = snapshot(doc, field);
-
       const records = await selectedFiles(resources, field);
       unchanged(doc, before);
       doc.addNamedFiles(field, namedFiles(records));
@@ -93,17 +76,13 @@ export function addScenarioFiles(doc: ScenarioDoc, field: ScenarioFileField, acc
 export function chooseScenarioFile(doc: ScenarioDoc, reference: ScenarioFileReference, accept?: string): void {
   const selectedReference = { ...reference, path: [...reference.path] };
   const field = fieldOf(selectedReference);
-  let before = snapshot(doc, field);
+  const before = snapshot(doc, field);
   openLibraryPicker({
     title: `Choose file for ${reference.name}`, kinds: ["file"], fileAccept: accept, fileKinds: [fileKind(field)],
     onUse: async (resources) => {
       if (resources.length !== 1) return false;
       unchanged(doc, before);
-      if (!prepare(doc, false)) return false;
-      unchanged(doc, before, false);
       if (doc.editor.value(selectedReference.path) !== selectedReference.name) throw new Error("The file reference changed. Review it and choose again.");
-      before = snapshot(doc, field);
-
       const records = await selectedFiles(resources, field);
       unchanged(doc, before);
       const selection = namedFiles(records)[0];
@@ -115,7 +94,7 @@ export function chooseScenarioFile(doc: ScenarioDoc, reference: ScenarioFileRefe
 }
 
 export function chooseScenarioTrajectory(doc: ScenarioDoc, preferredTrajectoryId?: string, onClose?: () => void): void {
-  let before = snapshot(doc, "trajectory");
+  const before = snapshot(doc, "trajectory");
   const adopted = doc.trajectory;
   const bound = doc.boundTrajectory;
   openSavedVersionPicker({
@@ -125,10 +104,6 @@ export function chooseScenarioTrajectory(doc: ScenarioDoc, preferredTrajectoryId
     resourceId: preferredTrajectoryId, onClose,
     onUse: async (candidate) => {
       unchanged(doc, before);
-      if (!prepare(doc, false)) return false;
-      unchanged(doc, before, false);
-      before = snapshot(doc, "trajectory");
-
       const attention = captureAttention();
       const revision = candidate.build.pin;
       const result = await doc.adopt(revision);
@@ -145,7 +120,7 @@ export function chooseScenarioTrajectory(doc: ScenarioDoc, preferredTrajectoryId
 export async function removeScenarioFile(doc: ScenarioDoc, reference: ScenarioFileReference): Promise<boolean> {
   const problem = `scenario:${doc.id}:remove-${reference.key}-file`;
   try {
-    if (!prepare(doc)) return false;
+    current(doc);
     fieldOf(reference);
     doc.removeNamedFile(reference);
     resolveProblem(problem);

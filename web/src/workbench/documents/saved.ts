@@ -1,8 +1,7 @@
 import { invertedEffects } from "@codemirror/commands";
 import { StateEffect, StateField, Transaction, type EditorState } from "@codemirror/state";
-import { ResourceArchivedError, VersionConflictError } from "@/io/storage";
-import type { DocumentSyncState, SaveState } from "@/model/document";
-import { immutableCopy, savedSnapshotDigest, type ResourceHead, type SavedVersion } from "@/model/version";
+import type { SaveState } from "@/model/document";
+import { immutableCopy, type ResourceHead, type SavedVersion } from "@/model/version";
 
 type Restoration = Readonly<{ versionId: string }>;
 type RestorationChange = Readonly<{ before: Restoration | null; after: Restoration | null }>;
@@ -19,20 +18,26 @@ export const savedHistory = [restoration, invertedEffects.of((transaction) => tr
   ? [setRestoration.of({ before: effect.value.after, after: effect.value.before })]
   : []))];
 
-export function restoredFrom(state: EditorState): string | null { return state.field(restoration)?.versionId ?? null; }
-export function restoreOrigin(state: EditorState, versionId: string | null) {
-  return setRestoration.of({ before: state.field(restoration), after: versionId === null ? null : { versionId } });
-}
-
 type WorkingCopy<V extends SavedVersion> = {
   snapshot(): V["snapshot"];
   state(): EditorState;
   publish(transaction: Transaction): void;
   notify(): void;
-  append(snapshot: V["snapshot"], baseline: ResourceHead, restoredFrom: string | null): Promise<Saved<V>>;
+  append(snapshot: V["snapshot"], restoredFrom: string | null): Promise<Saved<V>>;
 };
 
 type Saved<V extends SavedVersion> = { head: Extract<ResourceHead, { kind: V["kind"] }>; version: V };
+
+function sameSnapshot(left: SavedVersion["snapshot"], right: SavedVersion["snapshot"]): boolean {
+  if (left.source.text !== right.source.text) return false;
+  if ("name" in left) return "name" in right && left.name === right.name;
+  if (!("bindings" in right)) return false;
+  const before = left.bindings, after = right.bindings;
+  return before.trajectory?.versionId === after.trajectory?.versionId
+    && before.trajectory?.buildId === after.trajectory?.buildId
+    && Object.keys(before.files).length === Object.keys(after.files).length
+    && Object.entries(before.files).every(([name, digest]) => Object.hasOwn(after.files, name) && after.files[name] === digest);
+}
 
 export class SavedWorkingCopy<V extends SavedVersion> {
   private baseline: V;
@@ -55,22 +60,14 @@ export class SavedWorkingCopy<V extends SavedVersion> {
   get head(): ResourceHead { return this.baselineHead; }
   get observedHead(): ResourceHead | null { return this.observed; }
   get saving(): boolean { return this.requests > 0; }
-  get syncState(): DocumentSyncState {
-    if (this.observed === null) return { status: "missing" };
-    if (this.observed.archivedAt !== null) return { status: "archived", head: this.observed };
-    return this.observed.revision !== this.baselineHead.revision
-      ? { status: "changed", head: this.observed }
-      : { status: "current" };
-  }
-  get dirty(): boolean { return this.dirtyCache ??= savedSnapshotDigest(this.baseline.kind, this.working.snapshot()) !== this.baseline.contentDigest; }
+  get dirty(): boolean { return this.dirtyCache ??= !sameSnapshot(this.baseline.snapshot, this.working.snapshot()); }
   get state(): SaveState {
     return this.requests > 0 ? { status: "saving" }
-      : this.syncState.status !== "current" ? { status: "conflict", message: this.conflictMessage() }
       : this.failure !== null ? { status: "error", message: this.failure }
       : { status: this.dirty ? "pending" : "saved" };
   }
 
-  get issue(): string | null { return this.syncState.status === "current" ? this.failure : this.conflictMessage(); }
+  get issue(): string | null { return this.failure; }
 
   edited(): void { this.dirtyCache = null; }
   settled(): Promise<void> { return this.persistence; }
@@ -78,21 +75,9 @@ export class SavedWorkingCopy<V extends SavedVersion> {
   observe(head: ResourceHead | null): void {
     if (head !== null && (head.id !== this.baseline.resourceId || head.kind !== this.baseline.kind)) throw new Error("The saved version belongs to another resource");
     if (head !== null && this.observed !== null && head.revision < this.observed.revision) return;
-    if (head?.revision === this.observed?.revision && head?.headVersionId === this.observed?.headVersionId && head?.archivedAt === this.observed?.archivedAt) return;
+    if (head?.revision === this.observed?.revision && head?.headVersionId === this.observed?.headVersionId) return;
     this.observed = head;
     this.working.notify();
-  }
-
-  private conflictMessage(): string {
-    const state = this.syncState;
-    return state.status === "archived" ? "Archived in another tab. Save a copy to keep your work."
-      : state.status === "missing" ? "Removed from browser storage. Save a copy to keep your work."
-      : state.status === "changed" ? `Another tab saved v${state.head.headVersionNumber}. Load latest or save a copy.`
-      : "Review the latest saved version before saving.";
-  }
-
-  assertSaveable(): void {
-    if (this.syncState.status !== "current") throw new Error(this.conflictMessage());
   }
 
   adopt(resource: Saved<V>, apply: () => void): void {
@@ -124,14 +109,12 @@ export class SavedWorkingCopy<V extends SavedVersion> {
   }
 
   async save(): Promise<V> {
-    this.assertSaveable();
     const snapshot = immutableCopy(this.working.snapshot());
     const restored = this.working.state().field(restoration);
     this.requests++;
     this.working.notify();
     const task = this.persistence.then(async () => {
-      this.assertSaveable();
-      const resource = await this.working.append(snapshot, this.baselineHead, restored?.versionId ?? null);
+      const resource = await this.working.append(snapshot, restored?.versionId ?? null);
       const version = resource.version;
       this.baseline = version;
       this.dirtyCache = null;
@@ -143,11 +126,6 @@ export class SavedWorkingCopy<V extends SavedVersion> {
         this.working.publish(transaction);
       }
       return version;
-    }).catch((error) => {
-      if (error instanceof VersionConflictError || error instanceof ResourceArchivedError) {
-        this.observe(error.actual);
-          }
-      throw error;
     });
     this.persistence = task.then(() => undefined, () => undefined);
     try {

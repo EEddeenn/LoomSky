@@ -1,6 +1,5 @@
 import type { EditorState, Extension, Transaction, TransactionSpec } from "@codemirror/state";
 import type * as jsonc from "jsonc-parser";
-import type { ResourceHead } from "@/model/version";
 
 export type DocumentKind = "scenario" | "trajectory";
 export type DocumentDiagnostic = { file: DocumentKind; path: string; message: string; code: string; error: boolean; source?: string; line?: number; column?: number };
@@ -16,10 +15,7 @@ export type WriteChange = { path: jsonc.JSONPath; insert?: boolean } & (
   | { number: string; value?: never; json?: never }
   | { json: string; value?: never; number?: never }
 );
-export type DocumentSyncState = { status: "current" }
-  | { status: "changed" | "archived"; head: ResourceHead }
-  | { status: "missing" };
-export type SaveState = { status: "saved" | "pending" | "saving" } | { status: "error" | "conflict"; message: string };
+export type SaveState = { status: "saved" | "pending" | "saving" } | { status: "error"; message: string };
 
 export interface TextDocument {
   readonly id: string;

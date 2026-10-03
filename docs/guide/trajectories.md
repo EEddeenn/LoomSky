@@ -53,26 +53,25 @@ frequent controls under **Advanced**, **Stop at this event**,
 **Coordinates** and the selected object's **Delete** disclosure.
 
 **JSON** opens the same Plan beside the map, or fills the editor on narrow
-layouts. Field, map and JSON edits
-share the document's undo history for the page session. Recovery drafts
-retain the current source and unapplied input, and restoring one starts a
-new document undo/redo history. Correct a JSON syntax or structure
-error before using controls that depend on that structure. A well-formed
+layouts. Field, map and JSON edits share the document's undo history for
+the editing session. Correct a JSON syntax or structure error before using
+controls that depend on that structure. A well-formed
 Plan remains editable when its rules cannot be satisfied.
 
 The header keeps the Library name, latest saved **vN**, solve state, save
 state and duration in one row that wraps when space is limited. **Save**
-or Ctrl+S / Cmd+S saves changed working content as the next complete
+or Ctrl+S / Cmd+S saves working content as the next complete
 version. The **vN** control opens **Version history**.
 **Enter** or leaving a valid name applies it; **Esc** restores the applied
-name. An empty unapplied name blocks saving, generation, duplication, export and
-adoption. The Plan's own `name` is also available in Plan properties.
+name. An empty unapplied name must be corrected or reverted before Save,
+duplication or export. The Plan's own `name` is also available in Plan properties.
 If the applied Library name changes while a name draft is pending, the draft
 is retained as a conflict instead of overwriting that change. Revert the
 draft to return to the current applied name.
-Name and field drafts, unfinished drawings and timeline range input survive
-navigation and are included in [recovery drafts](storage.md#draft-recovery); see
-[unapplied inputs](scenarios.md#form-json-and-unapplied-inputs).
+Name and field drafts, unfinished drawings and timeline range input stay
+with the open editor when switching between its views. Leaving with unsaved
+work offers **Save and leave** or **Discard and leave** at the bottom right.
+See [unapplied inputs](scenarios.md#form-json-and-unapplied-inputs).
 
 ## Geometry, events and sections
 
@@ -229,9 +228,8 @@ open. Leaving it releases automatic solve work; returning prepares the
 result again. Library Preview reads the saved version and retained result.
 PHT export captures the Plan and compiles that snapshot independently of
 later edits.
-**Solve again** applies valid pending fields and names and retries the
-current working copy. Problems offer **Locate** to open an affected field, rule or
-JSON position.
+When calculation fails, **Retry** prepares current inputs and retries it.
+Problems offer **Locate** to open an affected field, rule or JSON position.
 
 | Display | Meaning |
 |---|---|
@@ -247,44 +245,43 @@ does not establish that the solution is a global optimum.
 
 Saving is separate from solving. **Saved** describes browser persistence;
 **Verified** describes the current compiled result. Save can retain invalid
-JSON or a Plan that fails to solve. Still-pending fields and the Library
-name are validated and applied together as one undo step; invalid or
-conflicting input must be corrected or reverted. Finish or cancel a drag
-that edits the trajectory before saving. Unfinished drawings and range input stay available but
-are excluded from the saved content. **Unsaved changes** describes applied
-content, while unapplied inputs have a separate indicator; both survive
-navigation through draft recovery. **Save failed** opens the storage problem.
+JSON or a Plan that fails to solve. Pending fields, the Library name, completed drawings and authored range
+input are prepared before saving. Invalid, conflicting or incomplete input
+stays visible and must be corrected or reverted; Save does not omit it.
+Finish or cancel an active drag before saving. **Unsaved** covers
+both document edits and pending input. **Save failed** opens the storage
+problem.
 
-Every changed Save appends a complete version; a clean Save adds nothing.
+Every Save appends a complete version.
 **Version history** shows the working copy and all saved versions. Choose
 **Restore working copy** to inspect or edit an older source, then Save
 to append a new version. Restoration clears unapplied inputs and active
 interactions even when the source text is unchanged. Earlier history
 remains intact. See
-[storage](storage.md) for restoration, backup and recovery.
+[storage](storage.md) for restoration and backup.
 
-## Export, duplicate and archive
+## Export, duplicate and delete
 
 | Action | Result | Compilation required? |
 |---|---|---|
 | **Export trajectory JSON** | the editable Plan `.json` | no |
 | **Export PHT** | the compiled runtime trajectory | the captured Plan must compile and verify |
 | **Duplicate** | an independent resource at saved v1, named with `copy` | no |
-| **Archive…** | review before hiding the active resource and discarding unsaved edits | no |
+| **Delete…** | review before deleting the resource, its saved versions and builds, and unsaved edits | no |
 
-Export and duplication apply valid pending fields and names first, preserve
-unfinished drawings and range input, and do not save the original working
+Export and duplication prepare the same complete input as Save, including
+completed drawings and range edits, and do not save the original working
 copy. They continue from their captured input after navigation or later
 edits. PHT export can start before the live working-copy solve is ready;
 its captured Plan must pass verification before a download is requested.
 Follow progress or cancel in **Activity → Operations**.
-Archival retains every saved version, build and generated byte.
-Scenarios already using one of those versions keep the
-same Plan and PHT after archival.
+A saved scenario version using this trajectory blocks deletion; the message
+identifies that scenario and version. Shared file bytes remain in browser
+storage.
 
 ## Use a saved version
 
-In **Setup → Trajectory**, choose **Choose from Library…**, select a
+In **Setup → Trajectory**, choose **Choose…** (or **Change…**), select a
 trajectory and a saved version, then press **Use vN**. The selected version
 must have a verified saved build. Its reference includes the Plan source
 and exact compiled PHT. Unsaved working content must be saved before it is

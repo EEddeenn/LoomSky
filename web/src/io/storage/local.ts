@@ -1,5 +1,4 @@
 type LocalKey = "mapLabels" | "theme";
-type SessionKey = `view:${string}`;
 
 export function readLocal(key: LocalKey): string | null {
   try {
@@ -23,20 +22,4 @@ export function onLocalChange(key: LocalKey, listener: () => void): () => void {
   };
   window.addEventListener("storage", receive);
   return () => window.removeEventListener("storage", receive);
-}
-
-export function readSession(key: SessionKey): string | null {
-  try {
-    return sessionStorage.getItem(`loomsky.${key}`);
-  } catch {
-    return null;
-  }
-}
-
-export function writeSession(key: SessionKey, value: string): void {
-  try {
-    sessionStorage.setItem(`loomsky.${key}`, value);
-  } catch {
-    return;
-  }
 }

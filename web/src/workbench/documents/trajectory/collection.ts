@@ -10,19 +10,18 @@ export const trajectoryCatalog = collection.catalog;
 export const trajectoryDocuments = collection.documents;
 export const peekTrajectory = collection.get;
 export const openTrajectory = collection.open;
-export const restoreTrajectoryDraft = collection.restoreDraft;
-export const trajectoryDraftDiscarded = collection.draftDiscarded;
 export const startTrajectories = collection.start;
 export const loadTrajectoryCatalog = collection.load;
 export const reloadTrajectoryCatalog = collection.refresh;
-export const archiveTrajectory = collection.archive;
+export const deleteTrajectory = collection.remove;
+export const releaseTrajectory = collection.release;
 
 export async function createTrajectoryDocument(snapshot: TrajectorySnapshot, options: ResourceWriteOptions = {}): Promise<TrajectoryDoc> {
   options.signal?.throwIfAborted();
   const captured = immutableCopy(snapshot);
   await loadTrajectoryCatalog();
   options.signal?.throwIfAborted();
-  const saved = await appendSavedVersion({ kind: "trajectory", resourceId: crypto.randomUUID(), expectedRevision: null, created: Date.now(), snapshot: captured }, [], options);
+  const saved = await appendSavedVersion({ kind: "trajectory", resourceId: crypto.randomUUID(), create: true, created: Date.now(), snapshot: captured }, [], options);
   return collection.add(new TrajectoryDoc(saved));
 }
 

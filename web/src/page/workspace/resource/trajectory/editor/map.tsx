@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { directionPoint, distanceOf, eventCourse, eventPosition, freshPlanId, pointsOf, vector, type GeometryPosition, type Plan, type PlanPosition } from "@/model/trajectory";
 import type { PreviewFrame } from "@/model/preview";
 import { PreviewMap } from "@/page/shared/preview/scene";
-import type { MapEditing, MapViewport } from "@/page/shared/preview/map";
+import type { MapEditing } from "@/page/shared/preview/map";
 import { Button } from "@/page/shared/ui";
 import type { TrajectoryDoc } from "@/workbench/documents/trajectory";
 import { useGeometryPreview, type EditOutcome, type Selection, type TrajectorySession } from "@/workbench/documents/trajectory/editing";
@@ -18,12 +18,11 @@ function mapPosition(position: GeometryPosition) {
   return { lat: position.latitude, lon: position.longitude };
 }
 
-export function TrajectoryMap({ doc, plan, frame, previewSession, viewport, session, state, visible, interactive, onOutcome }: {
+export function TrajectoryMap({ doc, plan, frame, previewSession, session, state, visible, interactive, onOutcome }: {
   doc: TrajectoryDoc;
   plan: Plan | null;
   frame: PreviewFrame;
   previewSession: PreviewSession;
-  viewport: MapViewport;
   session: TrajectorySession;
   state: SessionState;
   visible: boolean;
@@ -42,16 +41,8 @@ export function TrajectoryMap({ doc, plan, frame, previewSession, viewport, sess
   const activeDrag = drag.current?.token === gesture?.token ? drag.current : null;
   const modeLabel = dragMode === "hard" ? "requirement" : dragMode === "initial" ? "initial guess" : "target";
 
-  const createGeometry = (positions: readonly PlanPosition[], kind: "bezier" | "polyline" | "circle" | "polygon") => {
-    if (plan === null) return;
-    if (!onOutcome(session.execute({ type: "draw-geometry", kind, positions: [...positions] }))) return;
-    session.clearDrawing();
-    session.setTool("select");
-    session.showInspector(true);
-  };
   const finishDrawing = () => {
-    if (tool === "curve" && curveType === "polyline" && draft.length >= 2) createGeometry(draft, "polyline");
-    if (tool === "region" && regionType === "polygon" && draft.length >= 3) createGeometry(draft, "polygon");
+    onOutcome(session.commitDrawing());
   };
   const handles: MapEditing["handles"] = [];
   const paths: NonNullable<MapEditing["paths"]> = [];
@@ -168,9 +159,12 @@ export function TrajectoryMap({ doc, plan, frame, previewSession, viewport, sess
         const id = freshPlanId(plan, "point");
         onOutcome(session.execute({ type: "add-point", point: { id, position } }));
       } else if (tool === "curve" && curveType === "bezier" && draft[0] !== undefined) {
-        createGeometry([draft[0], position], "bezier");
-      } else if (tool === "region" && regionType === "circle" && draft[0] !== undefined) createGeometry([draft[0], position], "circle");
-      else if (tool === "curve" || tool === "region") session.appendDrawing(position);
+        session.appendDrawing(position);
+        onOutcome(session.commitDrawing("bezier"));
+      } else if (tool === "region" && regionType === "circle" && draft[0] !== undefined) {
+        session.appendDrawing(position);
+        onOutcome(session.commitDrawing("circle"));
+      } else if (tool === "curve" || tool === "region") session.appendDrawing(position);
       else if (tool === "direction" && selected?.kind === "event") {
         const origin = eventPosition(plan, selected.id, track);
         if (origin !== null) onOutcome(session.execute({ type: "target", scope: { event: selected.id }, quantity: "course", value: vector(mapPosition(origin), { lat, lon }).course }, "Set event direction"));
@@ -214,13 +208,14 @@ export function TrajectoryMap({ doc, plan, frame, previewSession, viewport, sess
       session.popDrawing();
     }
   }}>
-    <PreviewMap frame={frame} session={previewSession} viewport={viewport} editing={editing} />
+    <PreviewMap frame={frame} session={previewSession} editing={editing} />
     {plan === null ? <div className="absolute right-3 bottom-9 left-3 z-20 rounded-key bg-face px-3 py-2 text-small ring-key">Fix the trajectory structure to edit geometry. <button type="button" className="underline underline-offset-3" onClick={() => setView("json")}>Open JSON</button></div> : drawing && gesture === null ? (
       <div className="absolute right-3 bottom-9 left-3 z-20 flex flex-wrap items-center gap-2 rounded-key bg-face px-3 py-2 text-small ring-key">
         {tool === "curve" ? <select aria-label="Guide curve type" className="rounded-key bg-panel px-2 py-1 ring-key" value={curveType} onChange={(event) => session.setCurveType(event.target.value === "polyline" ? "polyline" : "bezier")}><option value="bezier">Bézier curve</option><option value="polyline">Polyline</option></select> : null}
         {tool === "region" ? <select aria-label="Region type" className="rounded-key bg-panel px-2 py-1 ring-key" value={regionType} onChange={(event) => session.setRegionType(event.target.value === "polygon" ? "polygon" : "circle")}><option value="circle">Circle</option><option value="polygon">Convex polygon</option></select> : null}
         <span>{tool === "point" ? "Click to add a point" : tool === "direction" ? selected?.kind === "event" ? "Click or drag the direction handle" : "Select an event to set its direction" : tool === "curve" ? curveType === "bezier" ? draft.length === 0 ? "Click the start of the guide curve" : "Click the end; drag its control points to shape it" : "Click each vertex, then finish" : regionType === "circle" ? draft.length === 0 ? "Click the region center" : "Click to set the radius" : "Click the corners in boundary order, then finish"}</span>
         {canFinish ? <Button size="sm" onClick={finishDrawing}>Finish</Button> : null}
+        {session.drawingIssue === null ? null : <span role="alert" className="basis-full text-ink">{session.drawingIssue}</span>}
         {draft.length > 0 ? <Button size="sm" variant="ghost" onClick={() => session.popDrawing()}>Remove last</Button> : null}
         <span className="ml-auto text-micro text-ink3">Esc cancels</span>
       </div>

@@ -1,5 +1,5 @@
 import { extendsSubmissionTruth, sameOperation, sameSubmissionSource, type PendingSubmissionRecord, type RunKnowledgeRecord, type StopIntentRecord, type SubmissionIdentity, type SubmissionRecord, type SubmissionTruth, type SubmissionTruthPatchResult } from "@/model/host";
-import { canonicalContent } from "@/model/version";
+import { canonicalContent, type BuildRecord, type SavedVersion } from "@/model/version";
 import { all, commitTransaction, get, readTransaction } from "./database";
 
 function withKnowledge(record: Omit<SubmissionRecord, "truth">, knowledge: RunKnowledgeRecord | undefined): SubmissionRecord {
@@ -62,7 +62,7 @@ export async function deleteStop(key: string): Promise<void> {
 }
 
 export async function savePending(record: PendingSubmissionRecord): Promise<void> {
-  await commitTransaction(["pending"], "save pending submission in", (transaction, fail, changed) => {
+  await commitTransaction(["pending", "savedVersions", "builds"], "save pending submission in", (transaction, fail, changed) => {
     const store = transaction.objectStore("pending");
     const request: IDBRequest<PendingSubmissionRecord | undefined> = store.get(record.key);
     request.onsuccess = () => {
@@ -80,9 +80,17 @@ export async function savePending(record: PendingSubmissionRecord): Promise<void
         };
         if (previous !== undefined) write();
         else {
+          const saved: IDBRequest<SavedVersion | undefined> = transaction.objectStore("savedVersions").get(record.source.versionId);
+          const built: IDBRequest<BuildRecord | undefined> = transaction.objectStore("builds").get(record.source.buildId);
           const competing: IDBRequest<PendingSubmissionRecord[]> = store.index("operationSlot").getAll([record.address, record.operation.boot, record.operation.sequence]);
           competing.onsuccess = () => {
             try {
+              const version = saved.result;
+              const build = built.result;
+              if (version?.kind !== "scenario" || version.resourceId !== record.source.scenarioId || version.number !== record.source.versionNumber
+                || build?.kind !== "scenario" || build.status !== "success" || build.versionId !== version.id || build.engineIdentity !== record.source.engineIdentity) {
+                throw new Error("The saved scenario or build is no longer available. Reopen the scenario before transmitting.");
+              }
               if (competing.result.some((pending) => pending.key !== record.key)) throw new Error("Another tab is preparing this transmission. Review the transmitter, then retry.");
               write();
             } catch (error) { fail(error); }

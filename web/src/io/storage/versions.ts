@@ -1,32 +1,19 @@
 import { randomId } from "@/core";
 import type { TaskOptions } from "@/io/compute";
-import { canonicalContent, freezeContent, immutableCopy, resourceSummary, savedSnapshotDigest, type AppendSavedVersion, type AppendedSavedVersion, type BuildRecord, type ResourceHead, type ResourceKind, type ResourceSummaryTrajectory, type SavedResource, type SavedVersion } from "@/model/version";
-import { all, commitTransaction, get, readTrajectoryDependency, request, StorageConflictError, type FileRecord, type VerifiedFileRecord } from "./database";
+import type { PendingSubmissionRecord, SubmissionRecord } from "@/model/host";
+import { canonicalContent, freezeContent, immutableCopy, resourceSummary, savedSnapshotDigest, savedVersionName, type AppendSavedVersion, type AppendedSavedVersion, type BuildRecord, type ResourceHead, type ResourceKind, type ResourceSummaryTrajectory, type SavedResource, type SavedVersion } from "@/model/version";
+import { all, commitTransaction, get, readTrajectoryDependency, request, type FileRecord, type VerifiedFileRecord } from "./database";
 
 export type ResourceWriteOptions = TaskOptions & { onCommit?: () => void };
-
-export class VersionConflictError extends StorageConflictError {
-  constructor(readonly expectedRevision: number | null, readonly actual: ResourceHead | null) {
-    super("The saved version changed in another editor. Review it before saving.");
-    this.name = "VersionConflictError";
-  }
-}
-
-export class ResourceArchivedError extends StorageConflictError {
-  constructor(readonly actual: ResourceHead) {
-    super("This resource was archived. Save your edits as a new resource.");
-    this.name = "ResourceArchivedError";
-  }
-}
 
 export async function getResourceHead(id: string): Promise<ResourceHead | undefined> {
   const record = await get("resourceHeads", id);
   return record === undefined ? undefined : freezeContent(record);
 }
 
-export async function loadResourceHeads(kind?: ResourceKind, includeArchived = false): Promise<ResourceHead[]> {
+export async function loadResourceHeads(kind?: ResourceKind): Promise<ResourceHead[]> {
   return (await all("resourceHeads"))
-    .filter((head) => (kind === undefined || head.kind === kind) && (includeArchived || head.archivedAt === null))
+    .filter((head) => kind === undefined || head.kind === kind)
     .map(freezeContent);
 }
 
@@ -105,17 +92,14 @@ export async function appendSavedVersion(input: AppendSavedVersion, bytes: reado
       try {
         const previousHead = pending.result;
         const actual = previousHead?.headVersionId ?? null;
-        if (previousHead?.archivedAt != null) throw new ResourceArchivedError(freezeContent(previousHead));
-        if ((previousHead?.revision ?? null) !== captured.expectedRevision) throw new VersionConflictError(captured.expectedRevision, previousHead === undefined ? null : freezeContent(previousHead));
+        if (captured.create ? previousHead !== undefined : previousHead === undefined) {
+          throw new Error(captured.create ? "A resource with this identity already exists." : "This resource was deleted. Save a new copy to keep your work.");
+        }
         if (previousHead !== undefined && previousHead.kind !== captured.kind) throw new Error("The saved resource has a different type");
         const append = (previous: SavedResource | undefined): void => {
           try {
             keepTransactionBytes(transaction, capturedBytes);
             requireSnapshotReferences(transaction, captured, fail, (trajectory) => {
-              if (previous !== undefined && previous.version.contentDigest === contentDigest && canonicalContent(previous.version.snapshot) === canonicalContent(captured.snapshot)) {
-                result = freezeContent({ ...previous, created: false });
-                return;
-              }
               const savedAt = Date.now();
               const identity = {
                 id: randomId(), resourceId: captured.resourceId,
@@ -126,7 +110,7 @@ export async function appendSavedVersion(input: AppendSavedVersion, bytes: reado
               const head = {
                 id: captured.resourceId, revision: (previousHead?.revision ?? 0) + 1, created: previous?.head.created ?? captured.created ?? savedAt,
                 headVersionId: identity.id, headVersionNumber: identity.number, headSavedAt: savedAt,
-                summary: resourceSummary(captured.kind, captured.snapshot, undefined, trajectory), archivedAt: null,
+                summary: resourceSummary(captured.kind, captured.snapshot, undefined, trajectory),
               };
               const resource: SavedResource = captured.kind === "scenario"
                 ? { head: { ...head, kind: "scenario" }, version: { ...identity, kind: "scenario", snapshot: captured.snapshot } }
@@ -161,16 +145,44 @@ export async function appendSavedVersion(input: AppendSavedVersion, bytes: reado
   return freezeContent(committed);
 }
 
-export async function archiveResource(id: string, expectedRevision: number): Promise<void> {
-  await commitTransaction(["resourceHeads"], "archive a resource in", (transaction, fail, changed) => {
-    const store = transaction.objectStore("resourceHeads");
-    const pending: IDBRequest<ResourceHead | undefined> = store.get(id);
-    pending.onsuccess = () => {
+export async function deleteResource(id: string): Promise<void> {
+  await commitTransaction(["resourceHeads", "savedVersions", "builds", "submissions", "pending"], "delete a resource from", (transaction, fail, changed) => {
+    const heads = transaction.objectStore("resourceHeads");
+    const versions = transaction.objectStore("savedVersions");
+    const builds = transaction.objectStore("builds");
+    const head: IDBRequest<ResourceHead | undefined> = heads.get(id);
+    const saved: IDBRequest<SavedVersion[]> = versions.getAll();
+    const built: IDBRequest<BuildRecord[]> = builds.getAll();
+    built.onsuccess = () => {
       try {
-        const current = pending.result;
-        if (current?.revision !== expectedRevision) throw new VersionConflictError(expectedRevision, current === undefined ? null : freezeContent(current));
-        if (current.archivedAt !== null) return;
-        store.put({ ...current, revision: current.revision + 1, archivedAt: Date.now() } satisfies ResourceHead);
+        const current = head.result;
+        if (current === undefined) return;
+        const versionIds = new Set(saved.result.filter((version) => version.resourceId === id).map((version) => version.id));
+        const buildIds = new Set(built.result.filter((build) => versionIds.has(build.versionId)).map((build) => build.id));
+        if (current.kind === "trajectory") {
+          const dependent = saved.result.find((version) => version.kind === "scenario" && version.snapshot.bindings.trajectory !== null
+            && (versionIds.has(version.snapshot.bindings.trajectory.versionId) || buildIds.has(version.snapshot.bindings.trajectory.buildId)));
+          if (dependent !== undefined) throw new Error(`Cannot delete this trajectory: scenario “${savedVersionName(dependent)}” v${dependent.number} uses it.`);
+        } else {
+          for (const name of ["submissions", "pending"] as const) {
+            const request = transaction.objectStore(name).openCursor();
+            request.onsuccess = () => {
+              try {
+                const cursor = request.result;
+                if (cursor === null) return;
+                const record = cursor.value as SubmissionRecord | PendingSubmissionRecord;
+                if (record.source.scenarioId === id || versionIds.has(record.source.versionId) || buildIds.has(record.source.buildId)) {
+                  const usage = "run" in record ? `run ${record.run} on ${record.address}` : `a pending transmission on ${record.address}`;
+                  throw new Error(`Cannot delete this scenario: ${usage} uses its saved version.`);
+                }
+                cursor.continue();
+              } catch (error) { fail(error); }
+            };
+          }
+        }
+        heads.delete(id);
+        for (const versionId of versionIds) versions.delete(versionId);
+        for (const buildId of buildIds) builds.delete(buildId);
         changed({ scope: "resources", key: id });
       } catch (error) { fail(error); }
     };

@@ -1,7 +1,7 @@
 import { randomId } from "@/core";
 import { resourceKey, type ResourceRef } from "@/model/resource";
 import { beginVisit, noteInteraction } from "./attention";
-import { startBrowserHistory, writeBrowserPage } from "./history";
+import { resumeBrowserPage, startBrowserHistory, writeBrowserPage } from "./history";
 import { capturePage, forgetResource, identityOf, instanceOf, resourceDestination, restorePage, type ResourceIdentity } from "./memory";
 import { normalizeRoute, parseRoute, resourceOf, routePath, type Destination, type DocumentView, type Route } from "./route";
 import { closePageSessions } from "./sessions";
@@ -10,6 +10,8 @@ import { page, publishPage, type DocumentFocus, type DocumentTarget } from "./st
 export type NavigationOptions = { history?: "push" | "replace" };
 let nextVisit = 0;
 let nextFocus = 0;
+type ConfirmLeave = (current: Route, next: Route, leave: () => void) => boolean;
+let confirmLeave: ConfirmLeave = () => true;
 
 function activate(route: Route, entryId: string, options: { focus?: DocumentTarget } = {}): void {
   capturePage();
@@ -35,8 +37,11 @@ export function navigate(destination: Destination, options: NavigationOptions = 
   }
   const history = options.history ?? "push";
   const entryId = history === "replace" ? current.entryId : randomId();
-  activate(route, entryId);
-  writeBrowserPage(entryId, routePath(route), history);
+  const leave = () => {
+    activate(route, entryId);
+    writeBrowserPage(entryId, routePath(route), history);
+  };
+  if (confirmLeave(current.route, route, leave)) leave();
 }
 
 export function openResource(resource: ResourceRef): void {
@@ -52,8 +57,11 @@ export function navigateToDocument(route: Route, focus: DocumentTarget): void {
   const current = page.get();
   const same = routePath(route) === routePath(current.route);
   const entryId = same ? current.entryId : randomId();
-  activate(route, entryId, { focus });
-  writeBrowserPage(entryId, routePath(route), same ? "replace" : "push");
+  const leave = () => {
+    activate(route, entryId, { focus });
+    writeBrowserPage(entryId, routePath(route), same ? "replace" : "push");
+  };
+  if (confirmLeave(current.route, route, leave)) leave();
 }
 
 export function resourceRemoved(resource: ResourceRef, expected?: ResourceIdentity): void {
@@ -80,13 +88,17 @@ export function refreshNavigationResource(): void {
   writeBrowserPage(current.entryId, routePath(current.route), "replace");
 }
 
-export function startRouting(): () => void {
+export function startRouting(onLeave: ConfirmLeave = () => true): () => void {
+  confirmLeave = onLeave;
   const stop = startBrowserHistory((entry) => {
     const route: Route = parseRoute(entry.path) ?? { workspace: "library" };
     const current = page.get();
     const samePage = entry.entryId === current.entryId && routePath(route) === routePath(current.route)
       && current.instance === instanceOf(route);
-    if (!samePage) activate(route, entry.entryId);
+    if (!samePage) {
+      if (!confirmLeave(current.route, route, () => resumeBrowserPage(entry))) return null;
+      activate(route, entry.entryId);
+    }
     return routePath(route);
   });
   const interact = () => noteInteraction();
@@ -96,6 +108,7 @@ export function startRouting(): () => void {
   return () => {
     capturePage();
     closePageSessions();
+    confirmLeave = () => true;
     stop();
     window.removeEventListener("pointerdown", interact, true);
     window.removeEventListener("keydown", interact, true);

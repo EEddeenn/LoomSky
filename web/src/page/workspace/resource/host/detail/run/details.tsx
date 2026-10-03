@@ -41,10 +41,9 @@ export function RunDetails({ host, view }: HostDisplay) {
             scenario === undefined ? null : (
               <span>
                 {scenario.head.id} v{scenario.head.headVersionNumber}
-                {scenario.head.archivedAt === null ? "" : " · Archived"}
                 {scenario.head.headVersionId === sub?.source.versionId ? " · Same version" : " · Different version"}
                 {scenario.working?.dirty || scenario.working?.pending ? " · Unsaved changes" : ""}
-                {scenario.head.archivedAt === null ? <NavLink size="xs" variant="ghost" className="ml-3" destination={{ workspace: "resource", kind: "scenario", id: scenario.head.id, tab: "setup" }}>Open scenario</NavLink> : null}
+                <NavLink size="xs" variant="ghost" className="ml-3" destination={{ workspace: "resource", kind: "scenario", id: scenario.head.id, tab: "setup" }}>Open scenario</NavLink>
               </span>
             ),
           ],

@@ -38,7 +38,7 @@ export function Editor({ doc }: { doc: ScenarioDoc }) {
   const size = useSize(container);
   const pane = useRef<HTMLDivElement>(null);
   useViewport(pane, `scenario:form:${section}`, view === "form" && schemaReady);
-  const beside = preview.dock === "right" && (size.width === 0 || size.width >= 900);
+  const beside = size.width === 0 || size.width >= 900;
   const maximum = Math.max(360, Math.min(620, (size.width || 1024) - 406));
   const width = Math.max(360, Math.min(maximum, preview.width));
 
@@ -71,7 +71,9 @@ export function Editor({ doc }: { doc: ScenarioDoc }) {
       ref={setContainer}
       aria-label="Scenario editor"
       className="grid min-h-0 min-w-0 flex-1 overflow-hidden"
-      style={beside
+      style={!preview.visible
+        ? { gridTemplateColumns: "minmax(0,1fr)", gridTemplateRows: "minmax(0,1fr)" }
+        : beside
         ? { gridTemplateColumns: `${width}px 6px minmax(0,1fr)`, gridTemplateRows: "minmax(0,1fr)" }
         : { gridTemplateColumns: "minmax(0,1fr)", gridTemplateRows: "minmax(160px,2fr) minmax(320px,3fr)" }}
     >
@@ -98,8 +100,8 @@ export function Editor({ doc }: { doc: ScenarioDoc }) {
           </>
         )}
       </section>
-      {beside ? <ConfigurationSplitter width={width} maximum={maximum} onChange={(width) => setScenarioPreview({ width })} /> : null}
-      <ScenarioPreview doc={doc} section={section} beside={beside} />
+      {preview.visible && beside ? <ConfigurationSplitter width={width} maximum={maximum} onChange={(width) => setScenarioPreview({ width })} /> : null}
+      {preview.visible ? <ScenarioPreview doc={doc} beside={beside} /> : null}
     </div>
   );
 }

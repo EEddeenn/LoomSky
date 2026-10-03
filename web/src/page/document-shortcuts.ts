@@ -1,9 +1,8 @@
-import { redo, undo } from "@codemirror/commands";
 import { hasInputHistory } from "@/page/shared/ui";
-import { dispatchDocumentTransaction } from "@/workbench/documents/editing";
+import { runDocumentHistory } from "@/page/shared/documents/history";
 import { saveDocument } from "@/workbench/documents/versions";
-import { peekScenario, scenarioDocuments } from "@/workbench/documents/scenario";
-import { peekTrajectory, trajectoryDocuments } from "@/workbench/documents/trajectory";
+import { peekScenario } from "@/workbench/documents/scenario";
+import { peekTrajectory } from "@/workbench/documents/trajectory";
 import { documentView, page } from "@/workbench/navigation";
 import { feedback } from "@/workbench/feedback";
 
@@ -44,17 +43,13 @@ export function startDocumentShortcuts(): () => void {
       return;
     }
     const direction = event.shiftKey || key === "y" ? "redo" : "undo";
-    if (documentView(page.get().route) === "form" && doc.editing.handleHistory(direction)) return;
-    (direction === "redo" ? redo : undo)({
-      state: doc.editor.state(),
-      dispatch: (transaction) => {
-        if (!dispatchDocumentTransaction(doc.editor, transaction)) doc.editor.accept(transaction.state);
-      },
-    });
+    runDocumentHistory(doc, direction, documentView(page.get().route));
   };
   const leave = (event: BeforeUnloadEvent) => {
-    const docs = [...scenarioDocuments.get().docs.values(), ...trajectoryDocuments.get().docs.values()];
-    if (!docs.some((doc) => doc.recoverable || doc.saved.dirty || doc.pending || doc.saved.state.status === "saving")) return;
+    const route = page.get().route;
+    if (route.workspace !== "resource") return;
+    const doc = route.kind === "scenario" ? peekScenario(route.id) : route.kind === "trajectory" ? peekTrajectory(route.id) : undefined;
+    if (doc === undefined || !doc.hasUnsavedChanges && doc.saved.state.status !== "saving") return;
     event.preventDefault();
     event.returnValue = "";
   };

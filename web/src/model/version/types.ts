@@ -26,7 +26,6 @@ export type ResourceHead<K extends ResourceKind = ResourceKind> = {
     headVersionNumber: number;
     headSavedAt: number;
     summary: ResourceSummary;
-    archivedAt: number | null;
   }>
 }[K];
 
@@ -64,7 +63,7 @@ export type SavedResource<K extends ResourceKind = ResourceKind> = {
 
 type AppendIdentity = Readonly<{
   resourceId: string;
-  expectedRevision: number | null;
+  create?: boolean;
   created?: number;
   restoredFrom?: string | null;
   note?: string;

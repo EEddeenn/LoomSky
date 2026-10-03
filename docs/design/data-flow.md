@@ -27,22 +27,21 @@ flowchart LR
 |---|---|---|---|
 | geometry inspection | Plan coordinates and geometry for a visible view | inspected points, curves and regions | trajectory editing owner requests short interactive computation; input identity and cancellation reject stale results; no solve or saved build |
 | working-copy evaluation | current Plan or scenario source and selected inputs | candidate, diagnostics or temporary ready preview | the mounted editor owns evaluation; edit revision and request identity must still match; operations compute from captured snapshots |
-| draft recovery | working source, saved baseline, bindings and pending editing input | plain checkpoint with runtime identity and expected draft revision | visited documents schedule recovery writes while staying in the tab; reload restores the draft with fresh undo history |
-| Save | source, metadata and selected input identities after field/name preparation | complete immutable `SavedVersion` and updated resource head | active gestures block capture; field/name validation precedes one editor transaction; storage checks the expected resource revision, appends the changed snapshot and advances the head together |
+| Save | source, metadata, bindings and valid pending input | complete immutable `SavedVersion` and updated resource head | prepare all fields, tables, drawings and ranges before one editor transaction; storage appends the captured snapshot and advances the head together |
 | saved trajectory build | saved Plan source and exact engine fingerprint | append-only `BuildRecord`, diagnostics and verified PHT when successful | build owner; retained artifact digests identify the exact bytes |
-| trajectory selection | successful build of a saved trajectory version | undoable `{ versionId, buildId }` pin in the scenario | picker/action captures candidate; document applies only while its working sequence and selected inputs match |
+| trajectory selection | explicitly selected saved version | undoable `{ versionId, buildId }` pin in the scenario | browsing reads saved content; Use obtains a successful build and applies it while the target still matches |
 | saved scenario build | saved scenario text, selected name/digest bindings and selected trajectory build | retained bundle, diagnostics and canonical summary | build owner; PHT and track remain owned by the pinned trajectory build |
 
 Trajectory names and Library file names describe resources. Content
 identity comes from a digest. A scenario binds a filename to selected
 bytes and captures a particular saved trajectory version and build.
 Renaming a catalogue entry or editing a working copy cannot change those
-saved bindings. A clean Save creates no additional version. A changed Save
-can retain invalid JSON or a failed check; invalid or conflicting field or
-name input must be corrected or reverted first. Unfinished drawings, table
-input and range drafts remain in the document's editing session and are
-excluded from the snapshot. **Use** changes only the scenario working copy
-and saves neither document.
+saved bindings. Save, export and duplication use the same snapshot
+preparation: valid fields, names, tables, drawings and ranges are applied
+in one undoable transaction. Invalid or unfinished pending input blocks
+capture and remains editable; raw JSON with syntax or domain errors can
+still be saved or exported as text. **Use** changes the scenario working
+copy; its next Save retains the selected pin.
 
 Saved trajectory builds include the fingerprint of the exact
 `pharos_traj.wasm` bytes; saved scenario builds use `pharos_pack.wasm`.
@@ -59,7 +58,9 @@ retained artifacts without invoking the current product engine.
 Saved-build attempts share a promise per version and engine. Closing a
 picker cancels its wait; the shared attempt retains its workbench lifetime.
 Scenario build records retain the bundle and summary, while the pinned
-trajectory build owns the PHT and track.
+trajectory build owns the PHT and track. A mounted scenario evaluation
+reuses its decoded trajectory while both version and build IDs match;
+a changed pin or suspension releases it.
 
 The compute pool schedules typed trajectory, pack and observation work,
 file hashing and ZIP compression. It shares matching in-flight native
@@ -75,9 +76,9 @@ available for correction or a later attempt.
 After a write transaction completes, tabs announce the affected scope and
 key. Subscribers reread committed records. Focus, page show and visibility
 return trigger a full refresh; there is no revision journal to replay. A
-visited document without local edits or editing history adopts a newer head;
-edits, pending input and undo/redo history preserve the working copy and
-expose a conflict.
+visited document without local edits or editing history adopts a newer head.
+Edits, pending input and undo/redo history preserve the working copy. The
+next Save appends it after the current stored head without a conflict mode.
 
 The pack summary supplies the resolved GPS window and leap schedule,
 sample format, rate and centre frequency, elevation mask, and declared
@@ -127,10 +128,10 @@ sequenceDiagram
 | host lifecycle | durable operation, pending payload, cancellation and run identity |
 
 The editor's explicit **Save & review** saves changed working content before
-opening a session with its successful build. The saved-version picker can
-select an existing version and build. Configure, review and send remain in
-one modal. Changing configuration clears the review; returning to the form
-keeps its drafts.
+opening a session with its successful build. The saved-version picker
+browses saved content and only loads or builds its selected version on Use.
+Configure, review and send remain in one modal. Changing configuration
+clears the review; returning to the form keeps its drafts.
 
 Send revalidates the captured registration, host identity and settings.
 Preparation and send check them again across asynchronous storage work, including the Live window. Its copied source and configuration remain

@@ -24,8 +24,10 @@ export function ConfirmationCard({ confirmation }: { confirmation: ConfirmationR
       </dl>
     )}
     <div className="flex justify-end gap-2">
-      <Button size="sm" disabled={confirmation.pending} onClick={() => cancelConfirmation(confirmation.id, confirmation.version)}>Cancel</Button>
-      <Button size="sm" variant="primary" disabled={confirmation.pending} onClick={() => void confirmConfirmation(confirmation.id, confirmation.version)}>{confirmation.pending ? "Working…" : confirmation.confirmLabel}</Button>
+      {confirmation.alternative === undefined
+        ? <Button size="sm" disabled={confirmation.pending} onClick={() => cancelConfirmation(confirmation.id, confirmation.version)}>Cancel</Button>
+        : <Button size="sm" disabled={confirmation.pending} onClick={() => void confirmConfirmation(confirmation.id, confirmation.version, true)}>{confirmation.alternative.label}</Button>}
+      <Button data-confirmation-primary size="sm" variant="primary" disabled={confirmation.pending} onClick={() => void confirmConfirmation(confirmation.id, confirmation.version)}>{confirmation.pending ? "Working…" : confirmation.confirmLabel}</Button>
     </div>
     <span role="status" className="vh">{confirmation.pending ? `${confirmation.confirmLabel} in progress` : `Confirmation required: ${confirmation.title}`}</span>
   </section>;

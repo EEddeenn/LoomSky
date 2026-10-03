@@ -11,8 +11,8 @@ import { Button, Spinner, useFocusScope } from "@/page/shared/ui";
 import { DocumentSaveStatus, SaveDocumentButton, SnapshotChanges, VersionDetails, VersionList, useDocumentSaveState, versionLabel, type VersionDocument } from "@/page/shared/documents/versions";
 
 export function VersionHistory({ doc, name, onClose }: { doc: VersionDocument; name: string; onClose(): void }) {
-  const { dirty, pending, unapplied, saving } = useDocumentSaveState(doc);
-  const [selected, setSelected] = useState<string | null>(() => dirty || pending > 0 || unapplied ? null : doc.saved.version.id);
+  const { changed, saving } = useDocumentSaveState(doc);
+  const [selected, setSelected] = useState<string | null>(() => changed ? null : doc.saved.version.id);
   const reader = useMemo(() => createVersionHistoryReader(doc.id), [doc.id]);
   const { data: history, error } = useStore(reader.state, (state) => state);
   const [restoring, setRestoring] = useState(false);
@@ -39,7 +39,7 @@ export function VersionHistory({ doc, name, onClose }: { doc: VersionDocument; n
   const selectedVersion = versions.find((version) => version.id === selected);
   const previous = selectedVersion === undefined ? null : versions.find((version) => version.id === selectedVersion.parentVersionId) ?? null;
   const currentSnapshot = doc.workingSnapshot;
-  const same = selectedVersion !== undefined && canonicalContent(currentSnapshot) === canonicalContent(selectedVersion.snapshot) && pending === 0 && !unapplied && headVersionId === versionId;
+  const same = selectedVersion !== undefined && canonicalContent(currentSnapshot) === canonicalContent(selectedVersion.snapshot) && !doc.pending && headVersionId === versionId;
   const restore = async () => {
     if (selectedVersion === undefined || restoring) return;
     setRestoring(true);
@@ -58,20 +58,19 @@ export function VersionHistory({ doc, name, onClose }: { doc: VersionDocument; n
       {error === null ? null : <div role="alert" className="flex items-center gap-3 border-b border-line2 px-4 py-2 text-small"><p className="m-0 flex-1 text-fault">{error}</p><Button size="xs" onClick={reload}>Retry</Button></div>}
       <div className="grid min-h-0 flex-1 grid-cols-[224px_minmax(0,1fr)]">
         <aside aria-label="Version timeline" className="min-h-0 overflow-y-auto overscroll-contain border-r border-line2 px-2 py-3">
-          <VersionList versions={versions} selected={selected} onSelect={setSelected} headVersionId={headVersionId} builds={history?.builds} working={{ selected: selected === null, label: dirty ? `Changes since ${versionLabel(doc.saved.version.number)}` : pending > 0 ? `${pending} unapplied input${pending === 1 ? "" : "s"}` : unapplied ? "Unapplied edits" : `Matches ${versionLabel(doc.saved.version.number)}`, onSelect: () => setSelected(null) }} />
+          <VersionList versions={versions} selected={selected} onSelect={setSelected} headVersionId={headVersionId} builds={history?.builds} working={{ selected: selected === null, label: changed ? `Changes since ${versionLabel(doc.saved.version.number)}` : `Matches ${versionLabel(doc.saved.version.number)}`, onSelect: () => setSelected(null) }} />
           {history !== null || error !== null ? null : <p role="status" className="mx-3 flex items-center gap-2 text-small text-ink3"><Spinner />Loading…</p>}
         </aside>
         <section aria-label="Version details" className="min-h-0 overflow-y-auto overscroll-contain p-5">
           {selected === null ? <div className="space-y-5">
             <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><h3 className="m-0 text-title font-semibold">Working copy</h3><div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1"><DocumentSaveStatus doc={doc} /></div></div></div>
-            {pending === 0 ? null : <p className="m-0 text-small text-ink3">{pending} unapplied input{pending === 1 ? "" : "s"}. Save applies valid field inputs first.</p>}
-            {unapplied ? <p className="m-0 text-small text-ink3">Comparison and Save use applied changes. Unapplied edits stay in the editor.</p> : null}
+            {doc.pending ? <p className="m-0 text-small text-ink3">Save to include your current input in the comparison.</p> : null}
             <SnapshotChanges snapshot={currentSnapshot} previous={doc.saved.version.snapshot} label={`Changes from ${versionLabel(doc.saved.version.number)}`} />
-          </div> : selectedVersion === undefined ? <p className="m-0 text-small text-ink3">Saved version unavailable.</p> : <VersionDetails version={selectedVersion} previous={previous} builds={history?.builds} history={versions} />}
+          </div> : selectedVersion === undefined ? <p className="m-0 text-small text-ink3">Saved version unavailable.</p> : <VersionDetails version={selectedVersion} previous={previous} history={versions} />}
         </section>
       </div>
       <footer className="flex flex-none flex-wrap items-center gap-3 border-t border-line2 px-4 py-3">
-        <p className="m-0 min-w-0 flex-1 text-small text-ink3">{selected === null ? unapplied ? null : dirty || pending > 0 ? `Save creates ${versionLabel(doc.saved.version.number + 1)}.` : `Matches saved ${versionLabel(doc.saved.version.number)}.` : "Restore replaces working copy and unapplied edits. Save creates a new version."}</p>
+        <p className="m-0 min-w-0 flex-1 text-small text-ink3">{selected === null ? changed ? "Save creates a new version." : `Matches saved ${versionLabel(doc.saved.version.number)}.` : "Restore replaces the current edits. Save creates a new version."}</p>
         <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
         {selected === null ? <SaveDocumentButton doc={doc} /> : <Button size="sm" disabled={same || selectedVersion === undefined || restoring || saving} onClick={() => void restore()}>{restoring ? "Restoring…" : "Restore working copy"}</Button>}
       </footer>

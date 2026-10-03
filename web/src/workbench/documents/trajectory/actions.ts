@@ -1,9 +1,9 @@
-import { archiveTrajectory, newTrajectory, type TrajectoryDoc } from "@/workbench/documents/trajectory";
+import { deleteTrajectory, newTrajectory, type TrajectoryDoc } from "@/workbench/documents/trajectory";
 import { captureAttention, type AttentionToken } from "@/workbench/navigation";
 import { reportProblem, resolveProblem } from "@/workbench/feedback";
 import { startDuplicate, startExport } from "@/workbench/operations";
 import { reportPendingIssue } from "../editing";
-import { captureOperation, confirmArchive, openCreated } from "../operations";
+import { captureOperation, confirmDelete, openCreated } from "../operations";
 
 export async function createTrajectory(): Promise<TrajectoryDoc | null> {
   const attention = captureAttention();
@@ -30,7 +30,7 @@ export async function copyTrajectory(doc: TrajectoryDoc, returnScenario?: string
   return true;
 }
 export async function removeTrajectory(doc: TrajectoryDoc): Promise<boolean> {
-  return confirmArchive(doc, archiveTrajectory, "Saved history and scenario references remain available.");
+  return confirmDelete(doc, deleteTrajectory);
 }
 async function download(doc: TrajectoryDoc, kind: "trajectory-json" | "trajectory-pht", attention: AttentionToken): Promise<boolean> {
   const input = captureOperation(doc, "export", attention);

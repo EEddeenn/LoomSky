@@ -57,7 +57,7 @@ export function LibraryToolbar({ filter, query, sort, previewOpen, picker, kinds
       {picker ? null : <>
         <Button id={`${id}-new`} icon="plus" popoverTarget={`${id}-new-menu`} disabled={disabled}>New</Button>
         <Popover id={`${id}-new-menu`} anchor={`${id}-new`} width={230} role="menu" label="New resource">
-          <button type="button" role="menuitem" className="px-3 py-2 text-left hover:bg-hover" onClick={(event) => openPopover("new-scenario-popover", event.currentTarget)}>Scenario…</button>
+          <NewScenario busy={disabled} onBusyChange={setCreating} />
           <button type="button" role="menuitem" className="px-3 py-2 text-left hover:bg-hover" onClick={(event) => { closePopover(event.currentTarget); void makeTrajectory(); }}>Trajectory</button>
           <button type="button" role="menuitem" className="border-t border-line px-3 py-2 text-left hover:bg-hover" onClick={(event) => openPopover("add-host-popover", event.currentTarget)}>Add transmitter…</button>
         </Popover>
@@ -81,6 +81,6 @@ export function LibraryToolbar({ filter, query, sort, previewOpen, picker, kinds
       )}
       <Button variant="ghost" icon="layers" aria-pressed={previewOpen} disabled={busy} onClick={onPreviewToggle} title={previewOpen ? "Hide preview" : "Show preview"}>Preview</Button>
     </div>
-    {picker ? null : <><NewScenario busy={disabled} onBusyChange={setCreating} anchor={`${id}-new`} /><AddHost anchor={`${id}-new`} /></>}
+    {picker ? null : <AddHost anchor={`${id}-new`} />}
   </>;
 }

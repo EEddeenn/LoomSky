@@ -51,16 +51,25 @@ export function writeTransaction(before: string, changes: readonly WriteChange[]
 
 export class DocumentText {
   readonly state: EditorState;
-  private readonly tree: jsonc.Node | undefined;
+  private readonly content: { text: string; tree: jsonc.Node | undefined; error?: ReturnType<typeof parseError> };
 
-  constructor(text: string | EditorState, extensions: Extension = []) {
+  constructor(text: string | EditorState, extensions: Extension = [], previous?: DocumentText) {
     this.state = typeof text === "string" ? EditorState.create({ doc: text, extensions: [documentHistory, extensions] }) : text;
-    this.tree = jsonc.parseTree(this.state.doc.toString(), [], { allowTrailingComma: true });
+    if (previous !== undefined && previous.state.doc.eq(this.state.doc)) this.content = previous.content;
+    else {
+      const source = this.state.doc.toString();
+      this.content = { text: source, tree: jsonc.parseTree(source, [], { allowTrailingComma: true }) };
+    }
   }
 
-  text(): string { return this.state.doc.toString(); }
+  text(): string { return this.content.text; }
 
-  private node(path: jsonc.JSONPath): jsonc.Node | undefined { return this.tree === undefined ? undefined : jsonc.findNodeAtLocation(this.tree, path); }
+  broken(): ReturnType<typeof parseError> {
+    if (this.content.error === undefined) this.content.error = parseError(this.content.text);
+    return this.content.error;
+  }
+
+  private node(path: jsonc.JSONPath): jsonc.Node | undefined { return this.content.tree === undefined ? undefined : jsonc.findNodeAtLocation(this.content.tree, path); }
 
   value(path: jsonc.JSONPath): unknown {
     const node = this.node(path);

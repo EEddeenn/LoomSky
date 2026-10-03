@@ -14,7 +14,7 @@ export type CommandForm = CommandDraft & { focus: number };
 export type ScenarioPreviewView = "map" | "sky" | "effective";
 export type ScenarioPreviewState = {
   view: ScenarioPreviewView;
-  dock: "right" | "below";
+  visible: boolean;
   width: number;
 };
 export type Page = {
@@ -31,7 +31,7 @@ export type Page = {
 };
 
 export const defaultCommand = (): CommandForm => ({ kind: "power", system: "GPS", svid: "", value: "", unit: "dbhz", noise: "", mask: "", focus: 0 });
-export const defaultScenarioPreview = (): ScenarioPreviewState => ({ view: "map", dock: "right", width: 440 });
+export const defaultScenarioPreview = (): ScenarioPreviewState => ({ view: "map", visible: true, width: 440 });
 const state = createStore<Page>({
   route: { workspace: "home" }, entryId: randomId(), visitId: 0, instance: null,
   documentFocus: null, lastScenario: null,
@@ -54,7 +54,7 @@ export function setCommand(patch: Partial<CommandForm>): void {
 }
 
 export function setScenarioPreview(patch: Partial<ScenarioPreviewState>): void {
-  publishPage({ scenarioPreview: { ...state.get().scenarioPreview, ...patch } });
+  publishPage({ scenarioPreview: { ...state.get().scenarioPreview, ...(patch.view === undefined ? {} : { visible: true }), ...patch } });
 }
 
 export function setActivity(patch: Partial<Page["activity"]>): void {

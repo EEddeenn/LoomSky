@@ -28,7 +28,7 @@ export function TrajectoryCanvas({ doc, view }: { doc: TrajectoryDoc; view: "for
   const preview = doc.view?.previewShape ?? null;
   const track = gesture === null ? doc.view?.currentShape ?? null : preview;
   const { session: previewSession, frame } = useTrajectoryPreviewSession(doc, track);
-  const viewport = usePreviewView(previewSession);
+  usePreviewView(previewSession);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const size = useSize(container);
   const [charts, setCharts] = useState(true);
@@ -71,7 +71,7 @@ export function TrajectoryCanvas({ doc, view }: { doc: TrajectoryDoc; view: "for
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <div className={`relative flex min-h-0 min-w-0 flex-1 flex-col ${mapVisible ? "" : "hidden"}`}>
           <div className="relative grid min-h-0 min-w-0 flex-1">
-            <TrajectoryMap doc={doc} plan={plan} frame={frame} previewSession={previewSession} viewport={viewport} session={session} state={state} visible={mapVisible} interactive={view === "form"} onOutcome={report} />
+            <TrajectoryMap doc={doc} plan={plan} frame={frame} previewSession={previewSession} session={session} state={state} visible={mapVisible} interactive={view === "form"} onOutcome={report} />
             {gesture !== null ? (
               <div aria-live="polite" className="pointer-events-none absolute right-3 bottom-9 left-3 z-20 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-key bg-face px-3 py-2 text-small ring-key">
                 <strong>{gesture.label}</strong>

@@ -1,11 +1,11 @@
 import { createStore } from "@/core";
+import { parseError, type Prepared } from "@/model/document";
 import {
   applyPlanCommand, createPlanRule, freshPlanId, planFrom, selectionExists, type Plan, type PlanCommand, type PlanEditMode, type PlanEntityKind,
   type PlanPosition, type PlanQuantity, type PlanScope, type PlanValue, type Track,
 } from "@/model/trajectory";
 import type { TrajectoryDoc } from "@/workbench/documents/trajectory";
 import { EditingSession } from "../../editing";
-import type { EditingCheckpoint } from "../../editing/session";
 import type { EditOutcome, Selection, Tool } from "./types";
 
 type Baseline = Readonly<{ rev: number; source: Plan; track: Track | null; text: string }>;
@@ -15,24 +15,23 @@ type Edit =
 type GestureStart = { ok: true; token: symbol } | Extract<EditOutcome, { ok: false }>;
 type DrawingKind = "bezier" | "polyline" | "circle" | "polygon";
 type TimelineQuantity = Extract<PlanQuantity, "speed3d" | "acceleration3d" | "altitude" | "jerk3d">;
-type RangeDraft = { range: { from: number; to: number } | null; value: string; authored: boolean };
+type RangeDraft = { range: { from: number; to: number } | null; value: string; authored: boolean; duration: number; error: string | null };
 type TrajectorySessionState = {
   selected: Selection; panel: "objects" | "properties" | null; tool: Tool; dragMode: PlanEditMode; edit: Edit;
   curveType: "bezier" | "polyline"; regionType: "circle" | "polygon";
   drawings: Record<DrawingKind, readonly PlanPosition[]>;
   drawingRedo: Record<DrawingKind, readonly PlanPosition[]>;
+  drawingErrors: Partial<Record<DrawingKind, string>>;
   timeline: { quantity: TimelineQuantity; ranges: Partial<Record<TimelineQuantity, RangeDraft>> };
 };
-export type TrajectoryEditingCheckpoint = EditingCheckpoint & Readonly<{
-  pendingName: string | null;
-  nameBase: string | null;
-  state: Omit<TrajectorySessionState, "edit">;
-}>;
 const emptyDrawing: readonly PlanPosition[] = [];
-const emptyRange: RangeDraft = { range: null, value: "", authored: false };
+const emptyRange: RangeDraft = { range: null, value: "", authored: false, duration: Infinity, error: null };
 const success: EditOutcome = { ok: true };
 const blocked = (message: string): Extract<EditOutcome, { ok: false }> => ({ ok: false, message, level: "warning" });
 const entityKinds: readonly PlanEntityKind[] = ["point", "curve", "region", "event", "section", "rule"];
+const drawingKinds: readonly DrawingKind[] = ["bezier", "polyline", "circle", "polygon"];
+const quantityLabels: Record<TimelineQuantity, string> = { speed3d: "Speed", acceleration3d: "Acceleration", altitude: "Altitude", jerk3d: "Jerk" };
+const rounded = (value: number) => Math.round(value * 100) / 100;
 const timelineQuantity = (quantity: PlanQuantity): TimelineQuantity | null =>
   quantity === "speed3d" || quantity === "acceleration3d" || quantity === "altitude" || quantity === "jerk3d" ? quantity : null;
 
@@ -45,25 +44,12 @@ export class TrajectorySession extends EditingSession {
     selected: null, panel: "objects", tool: "select", dragMode: "target", edit: { kind: "idle" },
     curveType: "bezier", regionType: "circle", drawings: { bezier: [], polyline: [], circle: [], polygon: [] },
     drawingRedo: { bezier: [], polyline: [], circle: [], polygon: [] },
+    drawingErrors: {},
     timeline: { quantity: "speed3d", ranges: {} },
   });
 
   constructor(doc: TrajectoryDoc) { super(doc.editor); this.trajectory = doc; }
 
-  override checkpoint(): TrajectoryEditingCheckpoint {
-    this.leaveView();
-    const { edit: _edit, ...state } = this.get();
-    return structuredClone({ ...super.checkpoint(), pendingName: this.pendingName, nameBase: this.nameBase, state });
-  }
-
-  override restoreCheckpoint(checkpoint: TrajectoryEditingCheckpoint): void {
-    this.leaveView();
-    const saved = structuredClone(checkpoint);
-    this.pendingName = saved.pendingName;
-    this.nameBase = saved.nameBase;
-    this.editorState.set({ ...saved.state, edit: { kind: "idle" } });
-    super.restoreCheckpoint(saved);
-  }
   get = () => this.editorState.get();
   subscribe = (listener: () => void) => this.editorState.subscribe(listener);
 
@@ -129,6 +115,7 @@ export class TrajectorySession extends EditingSession {
     this.editorState.set({
       selected: null, tool: "select", drawings: { bezier: [], polyline: [], circle: [], polygon: [] },
       drawingRedo: { bezier: [], polyline: [], circle: [], polygon: [] },
+      drawingErrors: {},
       timeline: { quantity: this.get().timeline.quantity, ranges: {} },
     });
     if (pending) this.changed();
@@ -157,6 +144,7 @@ export class TrajectorySession extends EditingSession {
     this.editorState.set((state) => ({
       drawings: { ...state.drawings, [kind]: [...state.drawings[kind], position] },
       drawingRedo: { ...state.drawingRedo, [kind]: positions.slice(0, -1) },
+      drawingErrors: { ...state.drawingErrors, [kind]: undefined },
     }));
     this.changed();
     return true;
@@ -171,6 +159,7 @@ export class TrajectorySession extends EditingSession {
     const kind = this.drawingKind;
     return kind === null ? emptyDrawing : this.get().drawings[kind];
   }
+  get drawingIssue(): string | null { return this.drawingKind === null ? null : this.get().drawingErrors[this.drawingKind] ?? null; }
 
   setCurveType(curveType: TrajectorySessionState["curveType"]): void { this.leaveView(); this.editorState.set({ curveType }); }
   setRegionType(regionType: TrajectorySessionState["regionType"]): void { this.leaveView(); this.editorState.set({ regionType }); }
@@ -178,9 +167,12 @@ export class TrajectorySession extends EditingSession {
   appendDrawing(position: PlanPosition): void {
     const kind = this.drawingKind;
     if (kind === null || !this.trajectory.editor.writable()) return;
+    const start = this.drawing[0];
     this.editorState.set((state) => ({
-      drawings: { ...state.drawings, [kind]: [...state.drawings[kind], position] },
+      drawings: { ...state.drawings, [kind]: (kind === "bezier" || kind === "circle") && start !== undefined
+        ? [start, position] : [...state.drawings[kind], position] },
       drawingRedo: { ...state.drawingRedo, [kind]: [] },
+      drawingErrors: { ...state.drawingErrors, [kind]: undefined },
     }));
     this.changed();
   }
@@ -192,6 +184,7 @@ export class TrajectorySession extends EditingSession {
     this.editorState.set((state) => ({
       drawings: { ...state.drawings, [kind]: state.drawings[kind].slice(0, -1) },
       drawingRedo: { ...state.drawingRedo, [kind]: [...state.drawingRedo[kind], position] },
+      drawingErrors: { ...state.drawingErrors, [kind]: undefined },
     }));
     this.changed();
     return true;
@@ -203,6 +196,7 @@ export class TrajectorySession extends EditingSession {
     this.editorState.set((state) => ({
       drawings: { ...state.drawings, [kind]: [] },
       drawingRedo: { ...state.drawingRedo, [kind]: [] },
+      drawingErrors: { ...state.drawingErrors, [kind]: undefined },
     }));
     this.changed();
     return true;
@@ -216,17 +210,117 @@ export class TrajectorySession extends EditingSession {
     this.editorState.set((state) => ({ timeline: { ...state.timeline, quantity } }));
   }
 
-  setRange(range: RangeDraft["range"], value = this.rangeDraft.value, authored = false): void {
+  setRange(range: RangeDraft["range"], value = this.rangeDraft.value, authored = false, duration = this.rangeDraft.duration): void {
     const before = this.rangeDraft;
-    if (before.range?.from === range?.from && before.range?.to === range?.to && before.value === value && before.authored === authored) return;
+    if (before.range?.from === range?.from && before.range?.to === range?.to && before.value === value && before.authored === authored && before.duration === duration) return;
     this.editorState.set((state) => ({
-      timeline: { ...state.timeline, ranges: { ...state.timeline.ranges, [state.timeline.quantity]: { range, value, authored } } },
+      timeline: { ...state.timeline, ranges: { ...state.timeline.ranges, [state.timeline.quantity]: { range, value, authored, duration, error: null } } },
     }));
     if (before.authored || authored) this.changed();
   }
 
-  setRangeValue(value: string): void { this.setRange(this.rangeDraft.range, value, true); }
+  setRangeValue(value: string, duration = this.rangeDraft.duration): void { this.setRange(this.rangeDraft.range, value, true, duration); }
   clearRange(): void { this.setRange(null, "", false); }
+
+  private drawingCommand(kind: DrawingKind, positions: readonly PlanPosition[]): Prepared<PlanCommand> {
+    const message = kind === "polygon" && positions.length < 3 ? "Place at least three corners to save the polygon."
+      : kind === "polyline" && positions.length < 2 ? "Place at least two points to save the polyline."
+      : kind === "bezier" && positions.length !== 2 ? "Place both endpoints to save the Bézier curve."
+      : kind === "circle" && positions.length !== 2 ? "Place the center and radius point to save the circle." : null;
+    return message === null ? { ok: true, value: { type: "draw-geometry", kind, positions } }
+      : this.drawingFailure(kind, message);
+  }
+
+  private drawingFailure(kind: DrawingKind, message: string): Extract<Prepared<never>, { ok: false }> {
+    this.editorState.set((state) => ({
+      drawingErrors: { ...state.drawingErrors, [kind]: message }, panel: null,
+      ...(kind === "bezier" || kind === "polyline" ? { tool: "curve", curveType: kind } : { tool: "region", regionType: kind }),
+    }));
+    return { ok: false, issue: { kind: "busy", message } };
+  }
+
+  private rangeCommand(plan: Plan, quantity: TimelineQuantity, draft: RangeDraft, kind: "hard" | "target"): Prepared<PlanCommand> {
+    const from = rounded(Math.min(draft.range?.from ?? NaN, draft.range?.to ?? NaN));
+    const to = rounded(Math.max(draft.range?.from ?? NaN, draft.range?.to ?? NaN));
+    const value = Number(draft.value);
+    const label = quantityLabels[quantity];
+    const message = !Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to > draft.duration || to <= from
+      ? `Choose a nonempty ${label.toLowerCase()} range${Number.isFinite(draft.duration) ? ` within 0–${draft.duration} s` : ""}.`
+      : draft.value.trim() === "" || !Number.isFinite(value) || quantity !== "altitude" && value < 0
+        ? `Enter a valid ${quantity === "altitude" ? "" : "nonnegative "}${label.toLowerCase()} value.` : null;
+    if (message !== null) return this.rangeFailure(quantity, message);
+    const id = freshPlanId(plan, `${label.toLowerCase()}-${kind === "hard" ? "limit" : "target"}`);
+    const scope: PlanScope = { timeRange: [from, to] };
+    return { ok: true, value: { type: "add-rule", rule: kind === "hard"
+      ? { id, kind, quantity, scope, range: { max: value } } : { id, kind, quantity, scope, value } } };
+  }
+
+  private rangeFailure(quantity: TimelineQuantity, message: string): Extract<Prepared<never>, { ok: false }> {
+    this.editorState.set((state) => ({ timeline: {
+      ...state.timeline, quantity, ranges: { ...state.timeline.ranges, [quantity]: { ...(state.timeline.ranges[quantity] ?? emptyRange), error: message } },
+    } }));
+    return { ok: false, issue: { kind: "busy", message } };
+  }
+
+  commitDrawing(kind = this.drawingKind): EditOutcome {
+    if (kind === null) return success;
+    const command = this.drawingCommand(kind, this.get().drawings[kind]);
+    if (!command.ok) return blocked(command.issue.kind === "field" ? command.issue.issue.message : command.issue.message);
+    const outcome = this.execute(command.value);
+    if (!outcome.ok) { this.drawingFailure(kind, outcome.message); return outcome; }
+    this.editorState.set((state) => ({
+      drawings: { ...state.drawings, [kind]: [] }, drawingRedo: { ...state.drawingRedo, [kind]: [] },
+      drawingErrors: { ...state.drawingErrors, [kind]: undefined }, tool: "select", panel: "properties",
+    }));
+    this.changed();
+    return success;
+  }
+
+  commitRange(kind: "hard" | "target" = "hard"): EditOutcome {
+    const plan = planFrom(this.trajectory.editor.value([]));
+    if (plan === null) return blocked("Fix the plan structure before adding a range rule.");
+    const quantity = this.get().timeline.quantity;
+    const command = this.rangeCommand(plan, quantity, this.rangeDraft, kind);
+    if (!command.ok) return blocked(command.issue.kind === "field" ? command.issue.issue.message : command.issue.message);
+    const outcome = this.execute(command.value);
+    if (!outcome.ok) { this.rangeFailure(quantity, outcome.message); return outcome; }
+    this.clearRange();
+    return success;
+  }
+
+  preparePending(text: string): Prepared<{ text: string; committed(): void }> {
+    const state = this.get();
+    const drawings = drawingKinds.filter((kind) => state.drawings[kind].length > 0);
+    const ranges = (Object.entries(state.timeline.ranges) as [TimelineQuantity, RangeDraft][]).filter(([, draft]) => draft.authored);
+    if (drawings.length === 0 && ranges.length === 0) return { ok: true, value: { text, committed() {} } };
+    let plan = parseError(text) === null ? planFrom(JSON.parse(text)) : null;
+    if (plan === null) return { ok: false, issue: { kind: "busy", message: "Fix the trajectory JSON before saving drawing or range edits." } };
+    let selected = state.selected;
+    for (const kind of drawings) {
+      const command = this.drawingCommand(kind, state.drawings[kind]);
+      if (!command.ok) return command;
+      const result = applyPlanCommand(plan, command.value);
+      if (!result.ok) return this.drawingFailure(kind, result.message);
+      plan = result.plan;
+      selected = result.selection ?? selected;
+    }
+    for (const [quantity, draft] of ranges) {
+      const command = this.rangeCommand(plan, quantity, draft, "hard");
+      if (!command.ok) return command;
+      const result = applyPlanCommand(plan, command.value);
+      if (!result.ok) return this.rangeFailure(quantity, result.message);
+      plan = result.plan;
+      selected = result.selection ?? selected;
+    }
+    return { ok: true, value: { text: `${JSON.stringify(plan, null, 2)}\n`, committed: () => {
+      this.editorState.set((current) => ({
+        selected, ...(drawings.length > 0 ? { tool: "select" as const, panel: "properties" as const } : {}),
+        drawings: { bezier: [], polyline: [], circle: [], polygon: [] }, drawingRedo: { bezier: [], polyline: [], circle: [], polygon: [] }, drawingErrors: {},
+        timeline: { ...current.timeline, ranges: Object.fromEntries(Object.entries(current.timeline.ranges).filter(([, draft]) => !draft.authored)) },
+      }));
+      this.changed();
+    } } };
+  }
 
   select(selected: Selection): void {
     this.leaveView();
@@ -290,11 +384,6 @@ export class TrajectorySession extends EditingSession {
   begin(label = "Edit trajectory"): GestureStart {
     this.leaveView();
     if (!this.trajectory.editor.writable()) return blocked("This trajectory is no longer editable.");
-    const pending = this.trajectory.commitFieldInputs();
-    if (pending !== null) return {
-      ok: false, message: pending.kind === "field" ? pending.issue.message : pending.message,
-      level: "warning", issue: pending,
-    };
     if (this.trajectory.editor.broken() !== null) return blocked("Fix the trajectory JSON before editing objects.");
     const source = planFrom(this.trajectory.editor.value([]));
     if (source === null) return blocked("Fix the plan structure in JSON before editing objects.");

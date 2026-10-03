@@ -2,7 +2,7 @@ import { CheckSummary } from "@/page/shared/feedback";
 import { trimmed } from "@/core";
 import { NavLink } from "@/page/shared/navigation";
 import { Button, Softkeys } from "@/page/shared/ui";
-import { DocumentSaveStatus, SaveDocumentButton } from "@/page/shared/documents/versions";
+import { DocumentHistoryButtons, DocumentSaveStatus, SaveDocumentButton } from "@/page/shared/documents/versions";
 import type { TrajectoryDoc } from "@/workbench/documents/trajectory";
 import { adoptTrajectory } from "@/workbench/documents/scenario/actions";
 import { generateTrajectory } from "@/workbench/documents/trajectory/actions";
@@ -22,14 +22,15 @@ export function TrajectoryTools({ doc, busy, action, view }: TrajectoryActions &
 }) {
   return <div className="flex flex-wrap items-center gap-2">
     <Softkeys label="Trajectory view" options={[["form", "Editor"], ["json", "JSON"]]} value={view} onChange={setView} />
+    <DocumentHistoryButtons doc={doc} />
     <SaveDocumentButton doc={doc} />
-    <Button size="sm" variant="ghost" icon="refresh" title="Solve and verify the working copy" disabled={busy || doc.editor.status === "checking"} onClick={() => action(() => generateTrajectory(doc))}>Solve</Button>
+    {doc.editor.status === "errors" ? <Button size="sm" variant="ghost" icon="refresh" title="Retry trajectory calculation" disabled={busy} onClick={() => action(() => generateTrajectory(doc))}>Retry</Button> : null}
   </div>;
 }
 
 export function TrajectoryStatus({ doc }: { doc: TrajectoryDoc }) {
   const shape = doc.view?.shape;
-  return <><CheckSummary docId={doc.id} status={doc.editor.status} diagnostics={doc.editor.diagnostics} checkingLabel="Solving…" readyLabel="Verified" /><DocumentSaveStatus doc={doc} />{shape === null || shape === undefined ? null : <span className="fn text-small text-ink3">{trimmed(shape.duration)} s</span>}</>;
+  return <>{doc.editor.status === "ready" && doc.editor.diagnostics.length === 0 ? null : <CheckSummary docId={doc.id} status={doc.editor.status} diagnostics={doc.editor.diagnostics} checkingLabel="Solving…" readyLabel="Verified" />}<DocumentSaveStatus doc={doc} />{shape === null || shape === undefined ? null : <span className="fn text-small text-ink3">{trimmed(shape.duration)} s</span>}</>;
 }
 
 export function TrajectoryContext({ doc, returnScenario, busy, action }: TrajectoryActions & { doc: TrajectoryDoc; returnScenario?: string }) {

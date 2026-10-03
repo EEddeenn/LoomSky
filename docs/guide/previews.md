@@ -39,16 +39,16 @@ inspect that same marked snapshot. Scenario output downloads capture and
 check the requested working content before producing a file. These
 operations do not save a document version.
 
-The scenario preview remains beside or below configuration, including
-JSON. Choose **Map**, **Sky / C/N0** or **Effective values**; each uses the
-same checked source and inspection time. The shared timeline stays below
-the selected view. Drag the configuration divider or use **Dock below** /
-**Dock right** to arrange the panes. Those choices are remembered for recent
-scenario views during the page session. Older view settings may return to
-their defaults.
+Show or hide the scenario preview from the editor header, including in JSON
+mode. Hiding it gives the editor the full width. When shown, it sits beside
+configuration on wide screens and below on narrow screens. Choose **Map**,
+**Sky / C/N0** or **Effective values**; each uses the same checked source and
+inspection time. The shared timeline stays below the selected view. Drag the
+configuration divider to resize side-by-side panes. The page session remembers
+these choices for recent scenario views.
 
 The preview header distinguishes the checked working copy from the last
-passed checks and marks unapplied inputs. Until the first successful check,
+passed checks. Until the first successful check,
 it shows an unavailable or preparing state. A successful new check replaces
 the preview source. If the inspection time falls outside its new window,
 the cursor moves to the nearest bound and the page reports the adjustment.
@@ -94,8 +94,10 @@ Altitude is above the EGM96 geoid. A stationary path or an unavailable
 heading displays `—`. The readout interpolates the display samples; use the
 generated PHT or modeled position file for trajectory data.
 
-New empty maps open at the world overview. Opening a basemap leaves the
-view in place. Workspace map views are remembered for each resource in this tab.
+Maps open fitted to the available track and editing geometry; empty maps
+open at the world overview. Drag or zoom to inspect the current map, or choose
+**Fit the track** to return to the full path. Opening a basemap leaves the
+view in place. Reopening a map fits it again.
 Library previews are smaller read-only views. Scenario host markers and
 lanes appear only for runs using that scenario's current packed bundle.
 
@@ -122,7 +124,7 @@ with a higher maximum zoom draw over coarser archives. Their own
 attributions appear at the foot of the map.
 
 Adding or removing an archive updates other LoomSky tabs at the same page
-origin. Map labels are shared too; each tab keeps its own camera position.
+origin. Map labels are shared too. Panning and zooming affect the current map.
 
 **Map labels** applies to every archive and is remembered in this browser.
 It is on by default. Labels prefer English names and fall back to the
@@ -130,7 +132,7 @@ archive's local name when necessary.
 
 An archive that opened previously but is unavailable on a later visit
 stays listed with its problem. It is tried again when the page loads.
-Use its remove control to review removing the stored address.
+Use its remove control to remove the stored address.
 
 The camera, track and editing controls remain usable while archives
 open. Without a basemap, the map shows a graticule. Browsers without
@@ -281,8 +283,8 @@ for the complete format and observable definitions.
 
 Choose a filename button in **Outputs → Download predictions** to download
 a prediction over the complete modeled window. The action first applies
-valid pending scenario fields and captures the working copy for preparation.
-Invalid unapplied fields must be corrected or reverted. Later source edits
+valid pending scenario fields and table input, then captures the working copy for preparation.
+Invalid or conflicting input must be corrected or reverted. Later source edits
 do not change that export. Downloading does not save the working copy or
 create a new document version.
 

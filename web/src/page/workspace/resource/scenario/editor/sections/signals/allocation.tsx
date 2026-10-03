@@ -5,6 +5,7 @@ import { fixed, listOf, numberOf, recordOf, useStore } from "@/core";
 import type { ScenarioDoc } from "@/workbench/documents/scenario";
 import { schemas } from "@/workbench/schemas";
 import { systemsOf, words } from "@/model/schema";
+import { appendCollectionItem, removeCollectionItem } from "@/model/scenario";
 import { Button, Fig, Icon } from "@/page/shared/ui";
 import { Field, Messages, NumberField, WordSelect } from "@/page/shared/documents/editor";
 import { diagnosticsAt } from "@/model/document";
@@ -109,7 +110,6 @@ function MaskOut({ doc }: { doc: ScenarioDoc }) {
   const root = useStore(schemas, (s) => s.scenario);
   const source = doc.editor.value(["maskOut"]);
   const rows = listOf(source).map((r) => recordOf(r) ?? {});
-  const write = (next: Record<string, unknown>[]) => doc.editor.write(["maskOut"], next.length === 0 ? undefined : next);
   return (
     <div className="flex min-w-0 flex-col gap-1" data-path="scenario:maskOut">
       {rows.map((r, i) => {
@@ -135,18 +135,13 @@ function MaskOut({ doc }: { doc: ScenarioDoc }) {
               icon="x"
               className="mt-5 h-8"
               aria-label={`Remove mask group ${i + 1}`}
-              onClick={() => changeDocument(doc, () => write(
-                listOf(doc.editor.value(["maskOut"])).map((row) => recordOf(row) ?? {}).filter((_, j) => j !== i),
-              ))}
+              onClick={() => changeDocument(doc, () => doc.editor.writeMany(removeCollectionItem(["maskOut"], doc.editor.value(["maskOut"]), i)))}
             />
           </div>
         );
       })}
       <div className="flex h-8 items-center">
-        <Button size="xs" icon="plus" onClick={() => changeDocument(doc, () => write([
-          ...listOf(doc.editor.value(["maskOut"])).map((row) => recordOf(row) ?? {}),
-          { svid: [] },
-        ]))}>
+        <Button size="xs" icon="plus" onClick={() => changeDocument(doc, () => doc.editor.writeMany(appendCollectionItem(["maskOut"], doc.editor.value(["maskOut"]), doc.editor.raw(["maskOut"]), { svid: [] })))}>
           Add group
         </Button>
       </div>

@@ -3,13 +3,14 @@ import type { PackedSummary, Window } from "@/model/bundle";
 import { compute } from "@/io/compute";
 import { reserveInput } from "@/io/input";
 import type { Coverage } from "@/io/pharos";
-import { fileByteLength, fileBytes } from "@/io/storage";
+import { fileByteLength, fileBytes, getResourceHead, onStorageChanges } from "@/io/storage";
 import type { DocumentDiagnostic } from "@/model/document";
 import type { ScenarioInputs } from "@/model/scenario";
 import { scenarioFileReferences } from "@/model/scenario";
 import type { GeneratedTrack } from "@/model/trajectory";
 import type { ScenarioSnapshot } from "@/model/version";
 import { compileScenarioSnapshot } from "./compile";
+import type { SavedTrajectoryBuild } from "../trajectory/builds";
 
 export type ScenarioResult = Readonly<{
   rev: number;
@@ -39,6 +40,8 @@ export class ScenarioEvaluation {
   private successfulSource: ScenarioRecovery["successful"] = null;
   private recovering: { source: Source; controller: AbortController } | null = null;
   private track: GeneratedTrack | null = null;
+  private dependency: SavedTrajectoryBuild | null = null;
+  private readonly unsubscribeStorage: () => void;
   private readonly coverage = new Map<string, Described>();
   private readonly descriptions = new Map<string, Description>();
   private packing: Packing | null = null;
@@ -47,6 +50,9 @@ export class ScenarioEvaluation {
 
   constructor(source: Source, private readonly notify: () => void) {
     this.source = source;
+    this.unsubscribeStorage = onStorageChanges((change) => {
+      if (change === null || change.scope === "resources" && change.key === this.dependency?.version.resourceId) void this.checkDependency();
+    });
   }
 
   get status(): Check["status"] { return this.check.status; }
@@ -64,7 +70,10 @@ export class ScenarioEvaluation {
     this.source = source;
     this.check = { status: "checking", diagnostics: this.check.diagnostics };
     this.cancelPacking();
-    if (previous.trajectory?.buildId !== next.trajectory?.buildId) this.track = null;
+    if (previous.trajectory?.versionId !== next.trajectory?.versionId || previous.trajectory?.buildId !== next.trajectory?.buildId) {
+      this.track = null;
+      this.dependency = null;
+    }
     const names = new Set(this.ephemeris());
     for (const name of new Set([...this.descriptions.keys(), ...this.coverage.keys()])) {
       if (names.has(name) && previous.files[name] === next.files[name]) continue;
@@ -89,11 +98,24 @@ export class ScenarioEvaluation {
     this.recovering = null;
     this.successful = null;
     this.track = null;
+    this.dependency = null;
     this.coverage.clear();
     this.check = { status: "checking", diagnostics: [] };
   }
 
-  dispose(): void { this.suspend(); this.successfulSource = null; }
+  dispose(): void { this.suspend(); this.unsubscribeStorage(); this.successfulSource = null; }
+
+  private async checkDependency(): Promise<void> {
+    const dependency = this.dependency;
+    if (dependency === null || !this.active) return;
+    let present = false;
+    try { present = await getResourceHead(dependency.version.resourceId) !== undefined; } catch { return; }
+    if (this.dependency !== dependency || present || !this.active) return;
+    this.dependency = null;
+    this.track = null;
+    this.update(this.source);
+    this.notify();
+  }
 
   private async restoreSuccessful(): Promise<void> {
     const source = this.successfulSource;
@@ -101,7 +123,7 @@ export class ScenarioEvaluation {
     const recovering = { source, controller: new AbortController() };
     this.recovering = recovering;
     try {
-      const result = await compileScenarioSnapshot(source.snapshot, { priority: "interactive", signal: recovering.controller.signal });
+      const result = await compileScenarioSnapshot(source.snapshot, { priority: "interactive", signal: recovering.controller.signal }, this.dependency);
       if (!this.active || this.recovering !== recovering || this.successfulSource !== source || result.status !== "success") return;
       if (result.engineIdentity !== source.engineIdentity) { this.successfulSource = null; return; }
       this.successful = {
@@ -143,8 +165,13 @@ export class ScenarioEvaluation {
   private async evaluate(packing: Packing): Promise<void> {
     const { source: { rev, snapshot }, controller } = packing;
     try {
-      const result = await compileScenarioSnapshot(snapshot, { priority: "interactive", signal: controller.signal });
+      const result = await compileScenarioSnapshot(snapshot, { priority: "interactive", signal: controller.signal }, this.dependency);
       if (this.packing !== packing || !this.active) return;
+      if (this.dependency !== result.dependency) {
+        this.dependency = result.dependency;
+        await this.checkDependency();
+        if (this.packing !== packing || !this.active) return;
+      }
       if (result.track !== null) this.track = result.track;
       const diagnostics = result.diagnostics.toSorted((left, right) => Number(right.error) - Number(left.error));
       if (result.status === "success") {

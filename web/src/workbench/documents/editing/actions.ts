@@ -26,13 +26,12 @@ export function runDocumentEdit(target: EditTarget, operation: () => Prepared<vo
   return false;
 }
 
-export function changeDocument(doc: EditTarget & { commitFieldInputs(): PendingIssue | null }, operation: () => void): boolean {
+export function changeDocument(doc: EditTarget & { editor: { writable(): boolean } }, operation: () => void): boolean {
   return runDocumentEdit({ kind: doc.kind, id: doc.id }, () => editDocument(doc, operation));
 }
 
-export function editDocument(doc: { commitFieldInputs(): PendingIssue | null }, operation: () => void): Prepared<void> {
-  const issue = doc.commitFieldInputs();
-  if (issue !== null) return { ok: false, issue };
+export function editDocument(doc: { editor: { writable(): boolean } }, operation: () => void): Prepared<void> {
+  if (!doc.editor.writable()) return { ok: false, issue: { kind: "busy", message: "This document is read-only." } };
   operation();
   return { ok: true, value: undefined };
 }

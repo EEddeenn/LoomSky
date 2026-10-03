@@ -14,7 +14,8 @@ export function Cards() {
   const activityOpen = useStore(page, (state) => state.activity.open);
   const element = useRef<HTMLElement>(null);
   const urgent = problems.filter((problem) => problem.urgent);
-  const initialFocus = () => element.current?.querySelector<HTMLButtonElement>('[data-confirmation] button:not(:disabled)') ?? null;
+  const initialFocus = () => element.current?.querySelector<HTMLButtonElement>(confirmation?.alternative === undefined
+    ? '[data-confirmation] button:not(:disabled)' : '[data-confirmation-primary]:not(:disabled)') ?? null;
   useFocusScope(element, {
     kind: "confirmation", active: confirmation !== null,
     enabled: () => feedback.get().confirmation !== null && !page.get().activity.open,

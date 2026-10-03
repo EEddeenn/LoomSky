@@ -1,5 +1,5 @@
 import { isolateHistory, undoDepth, redoDepth } from "@codemirror/commands";
-import { Transaction, type TransactionSpec } from "@codemirror/state";
+import type { TransactionSpec } from "@codemirror/state";
 import * as jsonc from "jsonc-parser";
 import { createStore, isRecord, listOf, recordOf } from "@/core";
 import { gpsInCalendarRange, gpsOfTime, presentLeap, type Leap } from "@/model/gnss";
@@ -10,12 +10,11 @@ import { resourceSummary, type ResourceHead, type ResourceSummaryTrajectory, typ
 import type { ArtifactFile } from "@/model/artifact";
 import type { TrajectoryRevision } from "@/model/trajectory";
 import { writeTransaction, type PendingIssue, type Prepared, type WriteChange } from "@/model/document";
-import { commitFieldInputs } from "../editing";
-import { coverageWindow, inputFileName, scenarioBindingHistory, scenarioBindings, scenarioFileReferences, setScenarioBindings, type ScenarioBindings, type ScenarioFileField, type ScenarioFileReference, type ScenarioFileSelection } from "@/model/scenario";
+import { commitFieldInputs, prepareFieldInputs, publishFieldChanges } from "../editing";
+import { appendCollectionItem, coverageWindow, inputFileName, scenarioBindingHistory, scenarioBindings, scenarioFileReferences, setScenarioBindings, type ScenarioBindings, type ScenarioFileField, type ScenarioFileReference, type ScenarioFileSelection } from "@/model/scenario";
 import { systemsOf } from "@/model/schema";
 import { schemas } from "@/workbench/schemas";
-import { SavedWorkingCopy, savedHistory, restoredFrom, restoreOrigin } from "../saved";
-import type { ScenarioDocumentCheckpoint } from "../checkpoint";
+import { SavedWorkingCopy, savedHistory } from "../saved";
 import { DocumentEditor } from "../editing/session";
 import { resolveTrajectoryBuild } from "../trajectory/builds";
 import { ScenarioEvaluation, type ScenarioRecovery } from "./evaluation";
@@ -34,9 +33,10 @@ export class ScenarioDoc {
   view: ScenarioEvaluation | null = null;
   private recovery: ScenarioRecovery = { successful: null };
   private bound: BoundTrajectory | null = null;
+  private summaryCache: { rev: number; bound: BoundTrajectory | null; value: ReturnType<typeof resourceSummary> } | null = null;
   private sequence = 0;
   private changeSequence = 0;
-  private lifetime: "active" | "archiving" | "disposed" = "active";
+  private lifetime: "active" | "deleting" | "disposed" = "active";
   private readonly changes = createStore({});
   private readonly unsubscribeInputs: () => void;
 
@@ -52,8 +52,8 @@ export class ScenarioDoc {
     });
     this.saved = new SavedWorkingCopy({ head, version }, {
       snapshot: () => this.workingSnapshot, state: () => this.editor.state(), publish: (transaction) => this.editor.publishTransaction(transaction),
-      notify: () => this.touch(), append: (snapshot, baseline, origin) => appendSavedVersion({
-        kind: this.kind, resourceId: this.id, expectedRevision: baseline.revision, snapshot, restoredFrom: origin,
+      notify: () => this.touch(), append: (snapshot, origin) => appendSavedVersion({
+        kind: this.kind, resourceId: this.id, snapshot, restoredFrom: origin,
       }),
     });
     this.editing = new ScenarioSession(this.editor);
@@ -65,11 +65,16 @@ export class ScenarioDoc {
   get name(): string { const name = this.editor.value(["name"]); return typeof name === "string" && name.trim() !== "" ? name : "Untitled scenario"; }
   get pending(): boolean { return this.editing.pending; }
   get hasUnsavedChanges(): boolean { return this.saved.dirty || this.pending; }
-  get recoverable(): boolean { return this.hasUnsavedChanges || this.saved.syncState.status !== "current" || this.saved.issue !== null; }
   get canAdoptExternal(): boolean { return !this.hasUnsavedChanges && !this.editing.busy && !this.saved.saving
     && undoDepth(this.editor.state()) === 0 && redoDepth(this.editor.state()) === 0; }
   get workingSnapshot(): ScenarioSavedVersion["snapshot"] { return { source: { text: this.editor.text() }, bindings: this.bindingSnapshot(this.files) }; }
-  get summary() { return resourceSummary(this.kind, this.workingSnapshot, this.name, this.bound !== null && this.bound.buildId === this.trajectory?.buildId ? this.bound : undefined); }
+  get summary() {
+    if (this.summaryCache?.rev !== this.editor.rev || this.summaryCache.bound !== this.bound) this.summaryCache = {
+      rev: this.editor.rev, bound: this.bound,
+      value: resourceSummary(this.kind, this.workingSnapshot, this.name, this.bound !== null && this.bound.buildId === this.trajectory?.buildId ? this.bound : undefined),
+    };
+    return this.summaryCache.value;
+  }
   private get bindings(): ScenarioBindings { return this.editor.state().field(scenarioBindings); }
   private get adopted(): TrajectoryRevision | null { return this.bindings.trajectory; }
   get files(): Readonly<Record<string, string>> { return this.bindings.files; }
@@ -110,27 +115,6 @@ export class ScenarioDoc {
     };
   }
 
-  checkpoint(): ScenarioDocumentCheckpoint {
-    return { format: 2, kind: this.kind, id: this.id, revision: this.editor.rev, sequence: this.sequence,
-      base: this.saved.head, restoredFrom: restoredFrom(this.editor.state()), snapshot: this.workingSnapshot,
-      editing: this.editing.checkpoint(), recovery: this.view?.checkpoint() ?? this.recovery };
-  }
-
-  restoreCheckpoint(checkpoint: ScenarioDocumentCheckpoint, resource: SavedResource<"scenario">): void {
-    this.saved.adopt(resource, () => {
-      this.editor.reset(checkpoint.snapshot.source.text, [scenarioBindings.init(() => checkpoint.snapshot.bindings), scenarioBindingHistory, savedHistory], checkpoint.revision);
-      this.editor.accept(this.editor.state().update({ effects: restoreOrigin(this.editor.state(), checkpoint.restoredFrom), annotations: Transaction.addToHistory.of(false) }).state);
-      this.editing.restoreCheckpoint(checkpoint.editing);
-      this.sequence = checkpoint.sequence;
-      this.recovery = checkpoint.recovery;
-      this.view?.suspend();
-      this.view?.update({ rev: this.editor.rev, snapshot: this.workingSnapshot });
-      this.view?.restoreRecovery(this.recovery);
-      this.view?.resume();
-      void this.initialize().catch(() => {});
-    });
-  }
-
   restore(version: SavedVersion, resource?: SavedResource): void {
     if (version.kind !== "scenario" || resource !== undefined && resource.version.kind !== "scenario") throw new Error("Choose a saved scenario version");
     if (this.lifetime !== "active") throw new Error("The scenario is no longer editable");
@@ -150,7 +134,7 @@ export class ScenarioDoc {
   reconcile(head: ResourceHead | null, version?: SavedVersion): void {
     if (this.lifetime !== "active") return;
     this.saved.observe(head);
-    if (head?.kind !== "scenario" || head.archivedAt !== null || head.revision !== this.saved.observedHead?.revision || version?.kind !== "scenario" || version.id !== head.headVersionId
+    if (head?.kind !== "scenario" || head.revision !== this.saved.observedHead?.revision || version?.kind !== "scenario" || version.id !== head.headVersionId
       || !this.canAdoptExternal) return;
     if (this.saved.version.id !== version.id) this.reloadSaved({ head, version });
   }
@@ -175,22 +159,28 @@ export class ScenarioDoc {
 
   prepareSnapshot(): PendingIssue | null {
     if (this.editing.busy) return { kind: "busy", message: "Finish or cancel the current edit first." };
-    return this.commitFieldInputs();
+    const fields = prepareFieldInputs(this.editor);
+    if (!fields.ok) return fields.issue;
+    const tables = this.editing.prepareTables(fields.value);
+    if (!tables.ok) return tables.issue;
+    return commitFieldInputs(this.editor, {}, () => this.editing.clearTableInputs(), tables.value);
   }
 
   async adopt(trajectory: TrajectoryRevision): Promise<Prepared<void>> {
-    const issue = this.prepareSnapshot();
-    if (issue !== null) return { ok: false, issue };
-    const sequence = this.sequence;
+    const previous = this.editor.raw(["trajectory"]);
+    const previousBinding = this.trajectory;
     const { record, version, pin } = await resolveTrajectoryBuild(trajectory);
-    if (!this.editor.writable() || this.sequence !== sequence) throw new Error("Scenario changed. Choose the trajectory again.");
+    if (!this.editor.writable() || this.editor.raw(["trajectory"]) !== previous || this.trajectory !== previousBinding) throw new Error("Trajectory changed. Choose the trajectory again.");
     const file = record.artifacts.pht;
     const name = this.selectedName(file.name);
     if (this.names().some((reference) => reference.key !== "trajectory" && reference.name === name)
       && this.files[name] !== undefined && this.files[name] !== file.digest) throw this.fileCollision(name);
+    const changes = [{ path: ["trajectory"], value: name }];
+    const spec = this.fileTransaction(changes, this.files, pin);
+    const transaction = spec === null ? null : this.editor.prepareTransaction(spec);
     this.bound = { buildId: pin.buildId, file, name: version.snapshot.name, resourceId: version.resourceId, versionId: version.id, versionNumber: version.number, digest: file.digest };
-    const transaction = this.fileTransaction([{ path: ["trajectory"], value: name }], this.files, pin);
-    if (transaction !== null) this.editor.apply(transaction);
+    publishFieldChanges(this.editor, transaction, changes);
+    if (transaction === null) this.touch();
     return { ok: true, value: undefined };
   }
 
@@ -220,11 +210,20 @@ export class ScenarioDoc {
     const previous = new Set(this.fileNames(key));
     const fresh = added.filter((name) => !previous.has(name));
     const named = key === "ephemeris" || key === "almanac";
-    const list = [...listOf(current), ...fresh.map((name) => named ? { name } : name)];
-    const value = key === "antenna" ? added[0]
-      : named && list.length === 1 && !Array.isArray(current) ? list[0]
-      : list;
-    this.applyFiles([{ path, value }], files);
+    const changes: WriteChange[] = [];
+    if (key === "antenna") changes.push({ path, value: added[0] });
+    else if (named && current === undefined && fresh.length === 1) changes.push({ path, value: { name: fresh[0] } });
+    else {
+      let value = current;
+      let raw = this.editor.raw(path);
+      for (const name of fresh) {
+        const item = named ? { name } : name;
+        changes.push(...appendCollectionItem(path, value, raw, item));
+        value = [...listOf(value), item];
+        raw = JSON.stringify(value);
+      }
+    }
+    this.applyFiles(changes, files);
   }
 
   selectNamedFile(reference: ScenarioFileReference, selection: ScenarioFileSelection): void {
@@ -298,8 +297,8 @@ export class ScenarioDoc {
   }
 
   private applyFiles(changes: readonly WriteChange[], files: Readonly<Record<string, string>>): void {
-    const transaction = this.fileTransaction(changes, files);
-    if (transaction !== null) this.editor.apply(transaction);
+    const spec = this.fileTransaction(changes, files);
+    publishFieldChanges(this.editor, spec === null ? null : this.editor.prepareTransaction(spec), changes);
   }
 
   private bindingSnapshot(files: Readonly<Record<string, string>>, trajectory = this.adopted): ScenarioBindings {
@@ -330,10 +329,10 @@ export class ScenarioDoc {
     this.unsubscribeInputs();
   }
 
-  async archive(commit: () => Promise<void>): Promise<void> {
+  async remove(commit: () => Promise<void>): Promise<void> {
     if (!this.editor.writable()) throw new Error("The scenario is no longer editable");
     this.editing.leaveView();
-    this.lifetime = "archiving";
+    this.lifetime = "deleting";
     this.view?.suspend();
     try { await this.saved.settled(); await commit(); this.dispose(); }
     catch (error) { this.lifetime = "active"; this.view?.resume(); this.touch(); throw error; }

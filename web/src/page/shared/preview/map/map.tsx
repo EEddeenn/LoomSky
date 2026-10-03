@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 import { fixed, useStore } from "@/core";
 import { stateAt, stateWidth, type Track } from "@/model/trajectory";
 import { theme } from "@/workbench/theme";
@@ -9,12 +9,11 @@ import { basemaps } from "@/workbench/basemaps";
 import { replaceProblems } from "@/workbench/feedback";
 import { styleKey, styleOf } from "./style";
 import { BasemapPopover } from "./basemap-popover";
-import { mercX, mercY, metresPerPixel, PlanCamera, project, type Bounds, type Camera, type Pad } from "./camera";
+import { mercX, mercY, metresPerPixel, PlanCamera, project, type Bounds, type Camera, type Pad, type View } from "./camera";
 import { hasWebgl2, LibreCamera, libreCamera } from "./libre";
 import { Overlay } from "./overlay";
 import { EditingOverlay, type MapEditing, type MapPoint } from "./editing";
 import type { Scene } from "@/workbench/preview";
-import type { MapViewport, Saved } from "./view";
 
 type Fit = { bounds: Bounds; pad: Pad };
 
@@ -93,7 +92,7 @@ function boundsOf(track: Track | null, points: MapPoint[], minimumMetres: number
   return x1 - x0 < minimum && y1 - y0 < minimum ? [cx - minimum / 2, cy - minimum / 3, cx + minimum / 2, cy + minimum / 3] : [x0, y0, x1, y1];
 }
 
-function useCamera(host: HTMLDivElement | null, start: Saved): Camera | null {
+function useCamera(host: HTMLDivElement | null, start: Pick<View, "x" | "y" | "zoom">): Camera | null {
   const [camera, setCamera] = useState<Camera | null>(null);
   const owner = useId();
   useEffect(() => {
@@ -139,15 +138,15 @@ type MapProps = {
   scene: Scene;
   label: string;
 } & (
-  | { variant?: "workspace"; editing?: MapEditing; follow?: { name: string; active: boolean; change(active: boolean): void }; viewport?: MapViewport }
-  | { variant: "preview"; editing?: never; follow?: never; viewport?: never }
+  | { variant?: "workspace"; editing?: MapEditing; follow?: { name: string; active: boolean; change(active: boolean): void } }
+  | { variant: "preview"; editing?: never; follow?: never }
 );
 
 export function MapView(props: MapProps) {
   return <MapCanvas key={props.viewKey} {...props} />;
 }
 
-function MapCanvas({ scene, label, variant = "workspace", editing, follow, viewport }: MapProps) {
+function MapCanvas({ scene, label, variant = "workspace", editing, follow }: MapProps) {
   const preview = variant === "preview";
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [section, setSection] = useState<HTMLElement | null>(null);
@@ -165,14 +164,6 @@ function MapCanvas({ scene, label, variant = "workspace", editing, follow, viewp
   const stopDragging = () => {
     dragFrom.current = null;
   };
-
-  useLayoutEffect(() => {
-    if (camera === null || viewport === undefined) return;
-    return viewport(camera, (saved) => {
-      autoFit.current = "manual";
-      camera.jump(saved);
-    });
-  }, [camera, viewport]);
 
   useEffect(() => {
     if (camera instanceof LibreCamera) camera.restyle(styleKey(list, mode, labels), styleOf(list, mode, labels));
@@ -206,7 +197,7 @@ function MapCanvas({ scene, label, variant = "workspace", editing, follow, viewp
     const v = camera.view();
     const [x, y] = project(v, mercX(s.lon), mercY(s.lat));
     if (x < 28 || y < 28 || x > v.width - 28 || y > v.height - 28) camera.jump({ x: mercX(s.lon), y: mercY(s.lat), zoom: v.zoom });
-  }, [camera, scene.following, scene.cursor, track, viewport]);
+  }, [camera, scene.following, scene.cursor, track]);
 
   const bare = !(camera instanceof LibreCamera) || list.length === 0;
   const attribution = bare ? "" : [...new Set(list.map((b) => b.attribution).filter(Boolean))].join(" · ");

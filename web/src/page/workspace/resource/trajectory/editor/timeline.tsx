@@ -3,11 +3,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react";
 import { offset, trimmed } from "@/core";
 import type { PreviewFrame } from "@/model/preview";
-import type { Plan, PlanRule, PlanScope } from "@/model/trajectory";
+import type { Plan } from "@/model/trajectory";
 import { Button, Softkeys } from "@/page/shared/ui";
 import type { TrajectoryDoc } from "@/workbench/documents/trajectory";
 import type { EditOutcome, Selection, TrajectorySession } from "@/workbench/documents/trajectory/editing";
-import { freshPlanId } from "@/model/trajectory";
 import { QuantityChart, type NumericHandle, type TimeRange } from "./timeline/chart";
 import { numericValues, plotSamples, quantities, ruleMarks, schedule, scopeRange, type EventMark } from "./timeline/data";
 import { clamp, plotBounds, sampleAt, timeX, valueY, type PlotBounds } from "./timeline/plot";
@@ -39,7 +38,7 @@ type Handle = {
 type Capture = { target: HTMLElement; pointer: number; releaseInteraction?: () => void };
 type Gesture = Capture & (
   | { kind: "edit"; token: symbol; handle: Handle; x: number; y: number; width: number; height: number; bounds: PlotBounds; latest: number; cursor: number }
-  | { kind: "seek" | "range"; anchor: number; cursor: number; range: TimeRange | null; rangeValue: string; rangeAuthored: boolean }
+  | { kind: "seek" | "range"; anchor: number; cursor: number; range: TimeRange | null; rangeValue: string; rangeAuthored: boolean; rangeDuration: number }
   | { kind: "resize"; y: number; height: number }
 );
 
@@ -52,7 +51,7 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
   const cursor = frame.epochMs;
   const track = frame.track;
   const { quantity } = useSyncExternalStore(session.subscribe, session.get, session.get).timeline;
-  const { range, value: rangeValue, authored: rangeAuthored } = session.rangeDraft;
+  const { range, value: rangeValue, authored: rangeAuthored, duration: rangeDuration, error: rangeError } = session.rangeDraft;
   const [height, setHeight] = useState(220);
   const collapsed = !expanded;
   const [rangeMode, setRangeMode] = useState(false);
@@ -96,7 +95,7 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
       if (cancelled) onSeek(current.cursor);
     } else if (cancelled && (current.kind === "seek" || current.kind === "range")) {
       onSeek(current.cursor);
-      session.setRange(current.range, current.rangeValue, current.rangeAuthored);
+      session.setRange(current.range, current.rangeValue, current.rangeAuthored, current.rangeDuration);
     } else if (cancelled && current.kind === "resize") setHeight(current.height);
   };
   callbacks.current = { cancel: () => clearGesture(true) };
@@ -115,6 +114,9 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
   useEffect(() => {
     if (!expanded) callbacks.current.cancel();
   }, [expanded]);
+  useEffect(() => {
+    if (rangeError !== null && !expanded) onExpandedChange(true);
+  }, [rangeError, expanded, onExpandedChange]);
 
   const eventHandle = (event: EventMark): Handle => ({
     selection: { kind: "event", id: event.id }, kind: "event", estimated: event.estimated, label: `${event.id} time`, axis: "time", value: event.time, time: event.time, min: 0,
@@ -150,7 +152,7 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
     if (current.kind === "resize") { setHeight(clamp(current.height + current.y - event.clientY, 220, 420)); return; }
     if (current.kind !== "edit") {
       const time = pointerTime(event, current.target);
-      if (current.kind === "range") session.setRange({ from: Math.min(current.anchor, time), to: Math.max(current.anchor, time) });
+      if (current.kind === "range") session.setRange({ from: Math.min(current.anchor, time), to: Math.max(current.anchor, time) }, undefined, current.rangeAuthored, bounds.duration);
       else seek(time);
       return;
     }
@@ -211,11 +213,11 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
     const time = pointerTime(event, event.currentTarget);
     const kind = writable && (event.shiftKey || rangeMode) ? "range" : "seek";
     event.currentTarget.setPointerCapture(event.pointerId);
-    gesture.current = { kind, target: event.currentTarget, pointer: event.pointerId, anchor: time, cursor, range, rangeValue, rangeAuthored };
+    gesture.current = { kind, target: event.currentTarget, pointer: event.pointerId, anchor: time, cursor, range, rangeValue, rangeAuthored, rangeDuration };
     gesture.current.releaseInteraction = session.captureInteraction(() => callbacks.current.cancel());
     if (kind === "range") {
       const value = sampleAt(samples, time);
-      session.setRange({ from: time, to: time }, value === null ? "" : String(rounded(value)));
+      session.setRange({ from: time, to: time }, rangeAuthored ? rangeValue : value === null ? "" : String(rounded(value)), rangeAuthored, bounds.duration);
       setHint("Select the rule's time range · Esc to cancel");
     } else seek(time);
   };
@@ -229,25 +231,9 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
     seek(next);
   };
   const createRule = (kind: "hard" | "target") => {
-    if (range === null || plan === null) return;
-    const value = Number(rangeValue);
-    const from = Math.min(range.from, range.to);
-    const to = Math.max(range.from, range.to);
-    if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to > bounds.duration || to <= from) {
-      setHint(`Choose a nonempty range within 0–${trimmed(bounds.duration)} s.`);
-      return;
-    }
-    if (rangeValue.trim() === "" || !Number.isFinite(value) || (quantity !== "altitude" && value < 0)) {
-      setHint("Enter a valid number.");
-      return;
-    }
-    const id = freshPlanId(plan, `${metric.label.toLowerCase()}-${kind === "hard" ? "limit" : "target"}`);
-    const scope: PlanScope = { timeRange: [rounded(from), rounded(to)] };
-    const rule: PlanRule = kind === "hard" ? { id, kind, quantity, scope, range: { max: value } }
-      : { id, kind, quantity, scope, value };
-    const outcome = session.execute({ type: "add-rule", rule }, `Add ${metric.label.toLowerCase()} ${kind === "hard" ? "limit" : "target"}`);
+    const outcome = session.commitRange(kind);
     onOutcome(outcome);
-    if (outcome.ok) { onSelect({ kind: "rule", id }); session.clearRange(); setRangeMode(false); setHint(null); }
+    if (outcome.ok) { setRangeMode(false); setHint(null); }
   };
   const timeHandles = (plan?.rules ?? []).flatMap((rule) => {
     if (!("quantity" in rule) || rule.quantity !== "time" || rule.kind === "objective") return [];
@@ -304,7 +290,7 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
             clearGesture(true); setRangeMode(!rangeMode);
             if (!rangeMode && range === null) {
               const from = Math.min(at, Math.max(0, bounds.duration - 1));
-              session.setRange({ from, to: Math.min(bounds.duration, from + Math.max(1, bounds.duration / 5)) }, currentValue === null ? "" : String(rounded(currentValue)));
+              session.setRange({ from, to: Math.min(bounds.duration, from + Math.max(1, bounds.duration / 5)) }, currentValue === null ? "" : String(rounded(currentValue)), false, bounds.duration);
             }
           }}>Select range</Button>}
           <Button size="xs" variant="ghost" aria-expanded={expanded} aria-controls={`trajectory-timeline-${doc.id}`} onClick={() => { clearGesture(true); onExpandedChange(!expanded); }}>{collapsed ? "Charts" : "Collapse"}</Button>
@@ -343,18 +329,18 @@ export function TrajectoryTimeline({ doc, plan, frame, onSeek, selected, session
         </div>
         {range === null ? null : <div className="flex h-8 flex-none items-center gap-2 overflow-x-auto border-t border-line text-small whitespace-nowrap">
           <span className="text-ink3">Range</span>
-          <input aria-label="Rule range start in seconds" type="number" min={0} max={bounds.duration} step={0.1} value={rounded(range.from)} onChange={(event) => session.setRange({ ...range, from: Number(event.target.value) }, undefined, true)} className="fn h-6 w-16 rounded-key bg-face px-1.5 ring-field" />
+          <input aria-label="Rule range start in seconds" type="number" min={0} max={bounds.duration} step={0.1} value={Number.isFinite(range.from) ? rounded(range.from) : ""} onChange={(event) => session.setRange({ ...range, from: event.target.valueAsNumber }, undefined, true, bounds.duration)} className="fn h-6 w-16 rounded-key bg-face px-1.5 ring-field" />
           <span className="text-ink3">to</span>
-          <input aria-label="Rule range end in seconds" type="number" min={0} max={bounds.duration} step={0.1} value={rounded(range.to)} onChange={(event) => session.setRange({ ...range, to: Number(event.target.value) }, undefined, true)} className="fn h-6 w-16 rounded-key bg-face px-1.5 ring-field" />
+          <input aria-label="Rule range end in seconds" type="number" min={0} max={bounds.duration} step={0.1} value={Number.isFinite(range.to) ? rounded(range.to) : ""} onChange={(event) => session.setRange({ ...range, to: event.target.valueAsNumber }, undefined, true, bounds.duration)} className="fn h-6 w-16 rounded-key bg-face px-1.5 ring-field" />
           <span className="text-ink3">s · {metric.label}</span>
-          <input aria-label={`${metric.label} rule value`} type="number" min={quantity === "altitude" ? undefined : 0} step={0.1} value={rangeValue} onChange={(event) => session.setRangeValue(event.target.value)}
+          <input aria-label={`${metric.label} rule value`} type="number" min={quantity === "altitude" ? undefined : 0} step={0.1} value={rangeValue} aria-invalid={rangeError !== null} onChange={(event) => session.setRangeValue(event.target.value, bounds.duration)}
             onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); createRule("hard"); } }} className="fn h-6 w-20 rounded-key bg-face px-1.5 ring-field" />
           <span className="text-ink3">{metric.unit}</span>
           <Button size="xs" disabled={!writable || !validRangeValue} onClick={() => createRule("hard")}>Add maximum</Button>
           <Button size="xs" disabled={!writable || !validRangeValue} onClick={() => createRule("target")}>Add target</Button>
           <Button size="xs" variant="ghost" onClick={() => { session.clearRange(); setRangeMode(false); setHint(null); }}>Clear</Button>
         </div>}
-        <p className="m-0 h-4 flex-none truncate text-micro text-ink3" aria-live="polite" title="Drag event times or numeric rule handles. Shift-drag selects a range.">{hint ?? (rangeMode ? "Drag to select a range, or enter its start and end."
+        <p className="m-0 min-h-4 flex-none text-micro text-ink3" aria-live="polite" title="Drag event times or numeric rule handles. Shift-drag selects a range.">{rangeError ?? hint ?? (rangeAuthored ? "Save adds this range as a maximum. Choose Add target to use a target instead." : rangeMode ? "Drag to select a range, or enter its start and end."
           : "Bands: hard limits · Diamonds: targets")}</p>
       </div>}
     </section>

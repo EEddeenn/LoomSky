@@ -1,14 +1,13 @@
 import { invertedEffects, isolateHistory, undoDepth, redoDepth } from "@codemirror/commands";
-import { StateEffect, StateField, Transaction } from "@codemirror/state";
-import { commitFieldInputs } from "@/workbench/documents/editing";
-import type { PendingIssue, Prepared } from "@/model/document";
+import { StateEffect, StateField } from "@codemirror/state";
+import { commitFieldInputs, prepareFieldInputs, publishFieldChanges } from "@/workbench/documents/editing";
+import { writeTransaction, type PendingIssue, type Prepared } from "@/model/document";
 import { createStore } from "@/core";
 import { compute } from "@/io/compute";
 import { appendSavedVersion } from "@/io/storage";
 import { resourceSummary, type ResourceHead, type SavedResource, type SavedVersion, type TrajectorySavedVersion } from "@/model/version";
 import type { GeneratedTrack, Track, TrajectorySource } from "@/model/trajectory";
-import { SavedWorkingCopy, savedHistory, restoredFrom, restoreOrigin } from "../saved";
-import type { TrajectoryDocumentCheckpoint } from "../checkpoint";
+import { SavedWorkingCopy, savedHistory } from "../saved";
 import { DocumentEditor } from "../editing/session";
 import { TrajectoryEvaluation, type TrajectoryRecovery } from "./evaluation";
 import { TrajectorySession } from "./editing";
@@ -35,7 +34,8 @@ export class TrajectoryDoc {
   private recovery: TrajectoryRecovery = { successful: null };
   private sequence = 0;
   private changeSequence = 0;
-  private lifetime: "active" | "archiving" | "disposed" = "active";
+  private summaryCache: { rev: number; value: ReturnType<typeof resourceSummary> } | null = null;
+  private lifetime: "active" | "deleting" | "disposed" = "active";
   private readonly changes = createStore({});
   private readonly unsubscribeInputs: () => void;
 
@@ -51,8 +51,8 @@ export class TrajectoryDoc {
     });
     this.saved = new SavedWorkingCopy({ head, version }, {
       snapshot: () => this.workingSnapshot, state: () => this.editor.state(), publish: (transaction) => this.editor.publishTransaction(transaction),
-      notify: () => this.touch(), append: (snapshot, baseline, origin) => appendSavedVersion({
-        kind: this.kind, resourceId: this.id, expectedRevision: baseline.revision, snapshot, restoredFrom: origin,
+      notify: () => this.touch(), append: (snapshot, origin) => appendSavedVersion({
+        kind: this.kind, resourceId: this.id, snapshot, restoredFrom: origin,
       }),
     });
     this.editing = new TrajectorySession(this);
@@ -65,13 +65,14 @@ export class TrajectoryDoc {
   get source(): TrajectorySource { return { text: this.editor.text() }; }
   get pending(): boolean { return this.editing.pending; }
   get hasUnsavedChanges(): boolean { return this.saved.dirty || this.pending; }
-  get recoverable(): boolean { return this.hasUnsavedChanges || this.saved.syncState.status !== "current" || this.saved.issue !== null
-    || Object.values(this.editing.get().drawingRedo).some((positions) => positions.length > 0); }
   get canAdoptExternal(): boolean { return !this.hasUnsavedChanges && !this.editing.busy && !this.saved.saving
     && undoDepth(this.editor.state()) === 0 && redoDepth(this.editor.state()) === 0
     && !Object.values(this.editing.get().drawingRedo).some((positions) => positions.length > 0); }
   get workingSnapshot(): TrajectorySavedVersion["snapshot"] { return { name: this.name, source: this.source }; }
-  get summary() { return resourceSummary(this.kind, this.workingSnapshot); }
+  get summary() {
+    if (this.summaryCache?.rev !== this.editor.rev) this.summaryCache = { rev: this.editor.rev, value: resourceSummary(this.kind, this.workingSnapshot) };
+    return this.summaryCache.value;
+  }
   subscribe(listener: () => void): () => void { return this.changes.subscribe(listener); }
   initialize(): Promise<void> { return Promise.resolve(); }
 
@@ -97,25 +98,6 @@ export class TrajectoryDoc {
     };
   }
 
-  checkpoint(): TrajectoryDocumentCheckpoint {
-    return { format: 2, kind: this.kind, id: this.id, revision: this.editor.rev, sequence: this.sequence,
-      base: this.saved.head, restoredFrom: restoredFrom(this.editor.state()), snapshot: this.workingSnapshot,
-      editing: this.editing.checkpoint(), recovery: this.view?.checkpoint() ?? this.recovery };
-  }
-
-  restoreCheckpoint(checkpoint: TrajectoryDocumentCheckpoint, resource: SavedResource<"trajectory">): void {
-    this.saved.adopt(resource, () => {
-      this.editor.reset(checkpoint.snapshot.source.text, [trajectoryName.init(() => checkpoint.snapshot.name), trajectoryNameHistory, savedHistory], checkpoint.revision);
-      this.editor.accept(this.editor.state().update({ effects: restoreOrigin(this.editor.state(), checkpoint.restoredFrom), annotations: Transaction.addToHistory.of(false) }).state);
-      this.editing.restoreCheckpoint(checkpoint.editing);
-      this.sequence = checkpoint.sequence;
-      this.recovery = checkpoint.recovery;
-      this.view?.suspend();
-      this.view?.restoreRecovery(this.recovery);
-      this.view?.resume();
-    });
-  }
-
   restore(version: SavedVersion, resource?: SavedResource): void {
     if (version.kind !== "trajectory" || resource !== undefined && resource.version.kind !== "trajectory") throw new Error("Choose a saved trajectory version");
     if (this.lifetime !== "active") throw new Error("The trajectory is no longer editable");
@@ -134,7 +116,7 @@ export class TrajectoryDoc {
   reconcile(head: ResourceHead | null, version?: SavedVersion): void {
     if (this.lifetime !== "active") return;
     this.saved.observe(head);
-    if (head?.kind !== "trajectory" || head.archivedAt !== null || head.revision !== this.saved.observedHead?.revision || version?.kind !== "trajectory" || version.id !== head.headVersionId
+    if (head?.kind !== "trajectory" || head.revision !== this.saved.observedHead?.revision || version?.kind !== "trajectory" || version.id !== head.headVersionId
       || !this.canAdoptExternal) return;
     if (this.saved.version.id !== version.id) this.reloadSaved({ head, version });
   }
@@ -169,7 +151,24 @@ export class TrajectoryDoc {
 
   prepareSnapshot(): PendingIssue | null {
     if (this.editing.busy) return { kind: "busy", message: "Finish or cancel the current edit before saving or using this document." };
-    return this.commitFieldInputs();
+    const name = this.editing.nameDraft?.trim() ?? null;
+    const nameIssue = this.editing.nameIssue;
+    if (nameIssue !== null) return { kind: "name", message: nameIssue };
+    const fields = prepareFieldInputs(this.editor);
+    if (!fields.ok) return fields.issue;
+    let text = this.editor.text();
+    try {
+      const inputs = writeTransaction(text, fields.value);
+      if (inputs !== null) text = this.editor.state().update(inputs).newDoc.toString();
+    } catch (error) {
+      return { kind: "busy", message: `Could not apply input: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    const pending = this.editing.preparePending(text);
+    if (!pending.ok) return pending.issue;
+    return commitFieldInputs(this.editor, {
+      ...(pending.value.text !== this.editor.text() ? { changes: { from: 0, to: this.editor.text().length, insert: pending.value.text } } : {}),
+      ...(name !== null && name !== this.name ? { effects: setTrajectoryName.of(name) } : {}),
+    }, () => { this.editing.clearNameDraft(); pending.value.committed(); });
   }
 
   preview(text: string, baselineRev: number): Promise<Track | null> {
@@ -188,10 +187,10 @@ export class TrajectoryDoc {
       return true;
     }
     if (this.view === null) return false;
-    this.view.commitPreview(text, baselineRev, () => this.editor.apply({
+    this.view.commitPreview(text, baselineRev, () => publishFieldChanges(this.editor, this.editor.prepareTransaction({
       changes: { from: 0, to: this.editor.text().length, insert: text },
       userEvent: "input.form", annotations: isolateHistory.of("full"),
-    }));
+    })));
     return true;
   }
 
@@ -229,10 +228,10 @@ export class TrajectoryDoc {
     this.unsubscribeInputs();
   }
 
-  async archive(commit: () => Promise<void>): Promise<void> {
+  async remove(commit: () => Promise<void>): Promise<void> {
     if (!this.editor.writable()) throw new Error("The trajectory is no longer editable");
     this.editing.leaveView();
-    this.lifetime = "archiving";
+    this.lifetime = "deleting";
     this.view?.suspend();
     try { await this.saved.settled(); await commit(); this.dispose(); }
     catch (error) { this.lifetime = "active"; this.view?.resume(); this.touch(); throw error; }

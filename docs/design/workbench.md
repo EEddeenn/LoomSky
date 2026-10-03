@@ -25,8 +25,8 @@ guides describe the controls built over these mechanisms.
 
 | Owner | Lifetime and release |
 |---|---|
-| document catalogues | resource-head summaries plus derived working-copy or recovery-draft summaries for the tab |
-| visited-document Map | one `ScenarioDoc` or `TrajectoryDoc` per opened resource, retained across navigation |
+| document catalogues | resource-head summaries plus derived working-copy summaries for the tab |
+| visited-document Map | one `ScenarioDoc` or `TrajectoryDoc` per opened resource until release or deletion |
 | document editor and saved state | source, same-tab undo history, pending input and saved baseline remain with the visited document |
 | document evaluation view | mounted editor only; unmount cancels calculation and releases generated buffers |
 | navigation and Library state | bounded history-entry and resource memories; cleanup invalidates captures |
@@ -43,9 +43,9 @@ guides describe the controls built over these mechanisms.
 `page.tsx` starts `startWorkbench()` on mount: storage, routing, clock,
 operations, hosts, schemas, document collections, Library files, basemaps
 and output sinks. Cleanup stops new work, cancels abortable operations,
-releases listeners and polling, checkpoints recoverable documents and
-requests a bounded run-history flush. It clears presentation, artifact and
-track caches, closes temporary output and storage owners, and disposes the
+releases listeners and polling, and requests a bounded run-history flush.
+It clears presentation, artifact and track caches, closes temporary output
+and storage owners, and disposes the
 compute pool. Owner generations reject late results. History API navigation
 preserves the runtime and captured operations. Page hide/freeze pauses host
 polling and evaluation; page show/resume restarts them without sending Stop.
@@ -53,22 +53,25 @@ polling and evaluation; page show/resume restarts them without sending Stop.
 Startup reads resource-head summaries without constructing every document.
 `openScenario` and `openTrajectory` load a resource once into their tab's
 visited Map. Browsing Library reads catalogue metadata and immutable saved
-previews without opening a working copy. The catalogue's `working` value is
-a projection of an opened document or its recovery-draft summary.
+previews without opening a working copy. A catalogue entry changes only
+when its summary, dirty/pending or save state changes; ordinary document
+subscribers still receive edit notifications.
 
 Each document composes `editor`, `saved`, `editing` and a nullable `view`.
 Mounting the editor attaches its evaluation view; leaving disposes that
-view while preserving source, same-tab undo history and pending input. A
-previous successful source can reconstruct a marked preview when its
+view. Switching sections of the same document preserves source, same-tab
+undo history and pending input. Leaving a document requires saving or
+discarding unsaved work. A previous successful source can reconstruct a
+marked preview when its
 recorded engine identity still matches. Captured operations evaluate their
 own immutable snapshots independently of the editor view.
 
-Recovery writes are scheduled after changes and on page hide/freeze. They
-store plain source and pending-input snapshots, with no durable undo log.
-A failed write leaves the working copy in the tab and reports a retryable
-problem. The close guard checks all visited documents for unsaved applied
-content, pending input and unfinished saves. Recovery writes are
-asynchronous; page close can precede the newest checkpoint.
+Unsaved work remains in memory until Save. Leaving a dirty document opens
+a small bottom-right prompt with **Save and leave** and **Discard and leave**.
+Discard drops unsaved source and pending session input. Switching sections
+within the same document does not prompt. Browser close or reload uses the
+native `beforeunload` warning for unsaved work; there are no recovery drafts
+or automatic checkpoints.
 
 ## Routing, actions and focus
 
@@ -121,13 +124,13 @@ Resource and visit memories keep up to 128 entries, with up to 32 view keys
 per entry. Writes refresh insertion order; reads do not alter it. Cleanup
 advances a capture generation so late view cleanup cannot repopulate cleared
 memory. Browser history holds page-entry IDs and canonical paths.
-The URL carries the route. Workspace camera preferences use tab-local
-sessionStorage; theme and map labels use shared localStorage notifications.
+The URL carries the route. Theme and map labels use shared localStorage
+notifications. Map cameras remain local to each mounted map and start fitted
+to the available track and editing geometry.
 
 Mounted adapters register form, host-pane, trajectory-panel and JSON
-scroll positions, and workspace map cameras. Scroll restoration waits for
-ready content and retries as its layout grows. Map cameras can fall back to
-their persisted view. Explicit `DocumentFocus` takes precedence over
+scroll positions. Scroll restoration waits for ready content and retries
+as its layout grows. Explicit `DocumentFocus` takes precedence over
 viewport restoration; the mounted editor resolves DOM focus or a JSON
 range. An `AttentionToken` combines the visit and interaction revision.
 Late viewport restoration and automatic navigation stop when the user has moved
@@ -141,12 +144,11 @@ operations continue under their business owners.
 Documents retain text, undo history and pending edits independently of
 presentation restoration.
 
-A picker discriminates resource selection from saved-version selection.
-Only a ready saved candidate can be used. Session/selection identities
-reject late preparation; busy state prevents replacement during application.
-File selection captures document identity, `workingSequence`, field value and
-bindings and rechecks them after byte reads. Uploading and selecting are
-separate actions.
+A picker selects resources or saved versions. Browsing saved versions reads
+metadata and content; Use resolves the selected build while busy state
+prevents replacement. File selection captures the target field and binding
+and rechecks them after byte reads. Unrelated edits remain available.
+Uploading and selecting are separate actions.
 
 `createVersionHistoryReader` serves resource-local history and the picker.
 It refreshes after saved-head or build changes, coalesces reads and releases
@@ -159,11 +161,10 @@ Workflow owners provide confirmation callbacks; feedback runs their lifecycle.
 |---|---|
 | `scenario/document.ts`, `trajectory/document.ts` | compose one working copy from editor, editing session, saved state and nullable evaluation view |
 | each `evaluation.ts` | mounted editor checks, current and previous results, temporary candidates and cancellation |
-| each `collection.ts` | resource catalogue, open/lookup, creation, duplication and archival of that resource kind |
+| each `collection.ts` | resource catalogue, open/lookup, creation, duplication and deletion of that resource kind |
 | each `transfer.ts` | file import and export; returns documents or downloadable contents |
 | each `actions.ts`, `editing.ts`, `builds.ts` | separate entries for resource-specific operations, edit sessions and saved builds |
-| shared `collection.ts` | metadata catalogue, visited-document Map, scheduled draft snapshots and committed-head reconciliation |
-| shared `checkpoint.ts`, `recovery.ts` | plain source and pending-input checkpoints, legacy draft conversion and recovery selection |
+| shared `collection.ts` | metadata catalogue, visited-document Map and committed-head reconciliation |
 | shared `saved.ts` | `SavedWorkingCopy`: saved baseline, dirty comparison, serialized saves, save errors and restoration origin |
 | shared `operations.ts` | pending-input feedback and navigation guarded by captured attention |
 
@@ -177,7 +178,7 @@ owners. Cross-resource browsing and selection remain in `workbench/library/`.
 |---|---|---|
 | `TrajectoryDoc` | editor, working name and Plan JSON, saved baseline and editing session | its mounted view owns a generated track tied to the editor revision |
 | `ScenarioDoc` | editor, scenario text, file bindings, trajectory version/build pin and saved baseline | its mounted view owns a `ScenarioResult` tied to the captured revision and inputs |
-| `DocumentText` | none; replaced with a new immutable value after a transaction | CodeMirror state, text and JSON tree |
+| `DocumentText` | immutable view of the latest editor state; identical document content shares parsed values | text, JSON tree and lazily computed strict parse error |
 | `ScenarioSession` | collection and table selections, batch and paste text, pending fields | prepared document transactions |
 | `TrajectorySession` | selection, inspector, tools, name and field drafts, drawings, range input and current gesture | one committed document transaction |
 
@@ -220,14 +221,14 @@ unmounts. The JSON component keeps one CodeMirror view per mount and updates
 read-only configuration through a compartment.
 
 The monotonic edit revision guards asynchronous work. It is independent
-of the saved version number shown to users. Dirty state compares complete
-working content with the saved baseline, so undoing back to that baseline
-can clear unsaved state without rewinding the edit revision.
+of the saved version number shown to users. Dirty state caches a direct
+comparison of source, name and bindings with the saved baseline. Undoing
+back to that content clears unsaved state; content digests are computed
+at persistence boundaries.
 
-`workingSequence` also advances for pending field, name and scratch input.
-Archival and restoration confirmations capture it; file selection and
-preparation check it across awaits. A changed pending field therefore
-invalidates the action even before it becomes a source edit.
+`workingSequence` advances for applied content and pending input. Deletion
+and restoration capture that complete state. Dependency selection checks
+only its affected reference across awaits, preserving unrelated edits.
 
 Scenario file bindings and the adopted trajectory live in a CodeMirror
 state field. Their state effect has an inverse history effect. Undo and
@@ -239,7 +240,10 @@ document. Focused text controls keep native text history, and CodeMirror
 keeps its document commands. In the form or visual editor, the session gets
 the first opportunity to cancel an active interaction or undo drawing
 points before document history runs. Dialogs, popovers, confirmations and
-Activity retain their own keyboard layer.
+Activity retain their own keyboard layer. Headers expose the same Undo/Redo
+commands and one Save status. Scenario preview has responsive placement
+and a visibility toggle. New scenario creates a default-named resource and
+opens Setup with Name focused; metadata and trajectory are edited there.
 
 ### Pending inputs
 
@@ -270,16 +274,20 @@ object lists. Unrelated source edits preserve them; a changed table or a
 changed, reordered or removed containing object list preserves the text as
 a conflict. That conflict remains until the input is discarded. The inline
 **Discard pending input** action and Problems' **Discard input** action
-clear it, including when its publication has been removed. Save continues
-to leave table text unapplied.
+clear it, including when its publication has been removed. Valid table
+input participates in Save without requiring a separate Apply action.
 
 | Operation | Contract |
 |---|---|
-| `commitFieldInputs()` | validate every field and the trajectory name, then apply them together in one isolated CodeMirror transaction; a `PendingIssue` leaves all pending values unapplied |
-| `prepareSnapshot()` | reject an active gesture, then commit field inputs before Save, export, duplication or result preparation captures the working content |
+| `commitFieldInputs()` | validate and apply pending fields with the prepared name or table changes in one isolated CodeMirror transaction |
+| `prepareSnapshot()` | preflight fields, names and all table/drawing/range input; apply valid input together before Save, export or duplication captures the result; invalid input or an active gesture leaves it unapplied |
 
-Prepared actions return `Prepared<T>` so expected invalid input can be
-routed to its owner without becoming an unrelated exception.
+Ordinary editing commands replace or remove only their target and its
+pending input; unrelated input remains. List changes relocate positional
+input, while object IDs preserve its identity. JSON edits retain form
+input and expose conflicts. Snapshot preparation gathers all pending input;
+a failure leaves source, Undo history and input intact. `Prepared<T>` routes
+the issue back to its input.
 
 Accepted entries leave the draft registry before the document publishes
 its write. Synchronous problem subscribers then see the new applied value
@@ -293,45 +301,21 @@ Views subscribe to that session; their cleanup calls `leaveView()` when the
 document, editor view or page visit changes. It releases pointer capture
 and cancels an active trajectory gesture. Field and name drafts, scenario
 batch and paste text, unfinished drawings and authored timeline ranges
-remain available when the view returns.
+remain available while switching views of the same document. Discarding
+changes on departure clears this unsaved session input.
 
-Applied content and unapplied session input have separate state. `dirty`
+Applied content and pending session input have separate state. `dirty`
 compares the working snapshot with its saved baseline; `pending` includes
-field and name drafts and authored scratch input. Save commits field and
-name drafts, but leaves drawings, table input and range drafts for their
-explicit apply actions. A saved working copy can therefore still have
-unapplied input.
+fields, names, tables, drawings and ranges. Apply can commit a local input
+immediately; Save includes all valid pending input in its snapshot.
 
 Source changes reconcile trajectory selection and invalidate a gesture with
 an older baseline without clearing scratch input. Restoration and disposal
 call `reset()` explicitly, including when the replacement source text is
 identical. Reset discards drafts and selections and invalidates active
-interaction callbacks independently of text-change detection. Navigation
-keeps the visited document and session. Reload recovery restores the saved
-plain checkpoint into a fresh editor state.
-
-### Recovery checkpoints
-
-A format-2 checkpoint stores the saved baseline, working source and bindings,
-edit revision, working sequence, restoration origin, pending editing input
-and the source of a previous successful result. It contains no CodeMirror
-transactions or durable undo history. Same-tab navigation retains the live
-editor history; recovery after reload creates a fresh history. Older draft
-formats are converted to their current source and pending-input snapshot.
-
-`draftHeads` provides resource, runtime, revision, summary and update-time
-metadata; `draftBodies` holds the checkpoint. Writes compare the draft
-revision and runtime owner inside a private transaction. A tab-local hint
-identifies its last draft. A new runtime can read it but forks a new draft
-ID before writing. Library's recovery view lists draft heads and supports
-explicit restoration or discard.
-
-Changes schedule a checkpoint after 700 ms. A busy gesture or Save defers
-the write. Restore first checkpoints the existing working copy and rechecks
-its working sequence across reads. The restored source remains a working
-copy and reconciles with the current head, so it may show a save conflict
-or an archived resource. A failed checkpoint leaves the visited document
-available and reports its recovery action.
+interaction callbacks independently of text-change detection. Discarding
+releases the working copy and its session. Reopening or reloading starts
+from saved source in a fresh editor state.
 
 ### Generated and packed results
 
@@ -349,6 +333,10 @@ contains the inputs that affect the result; selection, cursor, layout and
 a trajectory's Library name do not require another solve. The mounted
 evaluation view owns its result promise and cancellation source. Unmount
 drops its buffers; actions compile their captured snapshot separately.
+Scenario evaluation retains one decoded trajectory dependency, keyed by both
+version and build IDs, across source edits. Pin changes, suspension or a
+deleted trajectory release it; an explicit fresh check reloads it. Worker
+packing receives cloned input, leaving the retained track and PHT intact.
 
 `currentTrack` and `currentShape` require current source; `shape` may use
 the ghost. Save captures source independently of evaluation and does not
@@ -395,7 +383,7 @@ geometry references before applying any requested cascade. The
 ## Saved versions and persistence
 
 `io/storage.ts` exposes named operations. Its implementation owns the
-`loomsky-workbench` IndexedDB database, schema upgrades, key paths and transaction mechanics.
+`loomsky-workbench` IndexedDB database, initial schema, key paths and transaction mechanics.
 A promise resolves on transaction completion, after all requests in that
 transaction succeed. An abort rejects the operation. A failed database
 open can be retried. A version change closes the old connection, stops
@@ -403,13 +391,12 @@ synchronization and rejects further storage access until the tab reloads.
 
 | Store | Key | Value and owner |
 |---|---|---|
-| `resourceHeads` | resource id | resource kind, record revision, latest saved version pointer, compact name/dependency summary, creation time and archival state |
+| `resourceHeads` | resource id | resource kind, record revision, latest saved version pointer, compact name/dependency summary and creation time |
 | `savedVersions` | version id | immutable full scenario or trajectory snapshot, version number, parent, restoration source and content digest; indexed by resource id |
 | `builds` | build id | immutable saved input identity, engine fingerprint, diagnostics and artifact identities; indexed by version id |
 | `files` | SHA-256 digest | stored bytes |
 | `fileMetadata` | SHA-256 digest | byte length used for preparation admission without reading file contents |
 | `libraryFiles` | catalogue id | record revision, name, extension, kind, size and byte digest |
-| `draftHeads`, `draftBodies` | draft id | runtime-owned recovery summary and separate plain checkpoint, updated with an expected draft revision |
 | `hosts` | address | registration identity, credentials, settings and last-seen summary |
 | `pending` | address and operation identity | captured submission awaiting reconciliation |
 | `stops` | intent key | durable Stop target or unresolved intent |
@@ -422,35 +409,31 @@ build hints also identify their saved version. BroadcastChannel carries
 those identifiers, never document bodies, credentials or bundle bytes.
 Subscribers reread the affected committed records. Focus, page show and
 visibility return trigger a full refresh. Storage has no repository revision
-journal or periodic catch-up loop. Database upgrades remove the obsolete
-journal stores and normalize legacy trajectory pins and build records.
+journal or periodic catch-up loop. A new Library creates the current schema
+directly. Existing current-schema data is opened unchanged; older formats are
+rejected without migration or deletion.
 
 Collections reconcile working copies without local edits or editing history
 with newer heads. Dirty, pending, busy or saving documents, and documents with
-undo/redo history, preserve local content and expose the
-observed head as a conflict. Archival elsewhere also preserves an open
-working copy for explicit copying. Library files, registrations, basemaps,
+undo/redo history, preserve local content. Save appends that content after
+the current stored head without a cross-tab conflict workflow.
+Library files, registrations, basemaps,
 build history and run knowledge refresh from the same committed-change
 notifications; they do not apply another tab's in-memory objects.
 
-An accepted edit schedules generation or checking, never a document save.
-Explicit Save first prepares representable pending fields and the trajectory
-name in one transaction, then captures the entire working snapshot. Invalid
-raw JSON and failed checks are saveable; invalid or conflicting field/name
-input and an active gesture block Save. Unfinished drawings, table input and
-range drafts stay in their editing session and are excluded from the saved
-snapshot.
-New, imported and duplicated resources begin with a persisted v1.
+An accepted edit schedules generation or checking. Explicit Save uses
+`prepareSnapshot()` to include all valid pending input in one transaction,
+then captures the working content. Invalid raw JSON and failed checks remain
+saveable; invalid pending input blocks capture. New, imported and duplicated
+resources begin with a persisted v1.
 
-A save transaction verifies the resource's `expectedRevision`, compares complete
-content, appends a changed snapshot and advances the head together. A clean
-Save returns the existing version. Concurrent changes to the head cause a
-conflict instead of overwriting another tab's work. Each version contains
-the previous head as `parentVersionId`, its full source and metadata, and
-all selected filename-to-digest and trajectory version/build bindings.
+Save appends a complete snapshot and advances the current stored head in
+one transaction. Each version contains the previous head as `parentVersionId`,
+full source and metadata, and selected filename-to-digest and trajectory
+version/build bindings.
 Referenced bytes must be available before the transaction can complete.
-File rename/removal and resource archival likewise check the captured record
-revision. Host patches target their captured registration identity and
+File rename/removal checks the captured record revision. Host patches
+target their captured registration identity and
 credentials; fields owned by other host workflows are preserved.
 
 Byte persistence takes an owned snapshot and computes or verifies its
@@ -471,9 +454,9 @@ sequenceDiagram
     participant B as Build owner
     participant S as Scenario working copy
     participant D as Browser storage
-    T->>B: build saved source with exact engine identity
-    B->>D: append build result and retain artifact bytes
-    D-->>B: transaction complete
+    T->>B: Use loads or builds selected saved version
+    B->>D: load retained build or commit new build and artifacts
+    D-->>B: successful saved build
     B-->>S: selected saved version and successful build
     S->>S: Use applies one undoable text and binding transaction
     S->>S: run temporary checks
@@ -527,24 +510,23 @@ producers back into their dependencies.
 | `SavedTrajectoryBuild` | typed successful build record, immutable saved version, minimal version/build pin and decoded track |
 | `SavedScenarioBuild` | source version/build identity, bundle, typed summary, window, captured inputs and trajectory track |
 
-The saved-version picker reads immutable versions. A usable trajectory
-selection resolves a successful build and its exact saved version. **Use**
-writes only `{ versionId, buildId }` to the scenario binding in an undoable
-transaction; Save later retains that pin. Names, source, PHT and track are
-resolved from the immutable records when needed. Editing either working copy
-cannot update a saved scenario's reference. Copying a scenario can keep the same trajectory
-version/build; copying a trajectory starts an independent resource at v1.
-A scenario with no selected trajectory remains editable and saveable.
+The version picker lists saved versions and their content. Browsing starts
+no build. **Use** loads the explicitly selected build or builds the selected
+version, then applies its `{ versionId, buildId }` pin in an undoable
+transaction. Failure keeps the selection available for retry. A missing
+selected version is reported rather than replaced with the latest version.
+Save retains that pin. Copying a scenario can retain it; copying a trajectory
+starts an independent resource at v1. A scenario without a trajectory remains
+editable and saveable.
 
 `SavedResource` associates a head and version of the same resource kind.
 Storage validates their resource id, version id and version number before
 constructing that value. Picker options associate each kind with its
-candidate and callback type; a ready selection also pairs that candidate
-with the corresponding saved-version type.
+candidate and callback type; browsing holds only the selected saved version.
 
 Version history is linear and complete. Restoration copies a selected saved
 snapshot into the working copy; it does not move the stored head backwards.
-The next changed Save appends a version whose parent is the preceding head
+The next Save appends a version whose parent is the preceding head
 and whose `restoredFrom` identifies the selected historical version. The
 restoration can be inspected or edited before saving. It resets the editing
 session even when the selected snapshot has the same source text.
@@ -561,11 +543,12 @@ Event IDs and captured filenames used as object keys are own data
 properties. Inherited properties have no meaning after cloning or
 persistence; edits and ZIP entries preserve the literal names.
 
-Archival changes only the resource head's `archivedAt` value and removes
-the active working copy after storage succeeds. It retains every saved
-version, build and referenced byte, including those used by other resources
-and runs. History is not pruned or limited to a fixed number of versions.
-Discarding an unsaved working copy does not create a final version.
+Delete removes the resource head, all of its saved versions and their builds,
+then removes the active working copy after storage succeeds. A saved
+scenario version or pending/submitted run that references the resource
+blocks deletion and supplies the reason. Shared content bytes remain in
+the byte store. History remains complete until its resource is deleted;
+discarding unsaved work does not create a final version.
 
 Scenario JSON import normalizes path-like references to filenames and starts
 with unbound inputs. Scenario ZIP assembly collects the JSON, adopted PHT,
@@ -654,7 +637,7 @@ keep a second window value.
 |---|---|---|
 | pending submission | retain inputs and operation identity before upload; record a known target and cancellation intent | reconciliation proves the operation or accepted run is finished, and archival/cleanup succeeds |
 | Stop intent | retain the exact run or operation to stop across disconnection and reload | a matching or newer snapshot proves the target ended, then storage cleanup succeeds |
-| submission | retain an immutable run snapshot with structured source version/build identity and exact captured inputs | remains available to history independently of later Library edits or archival |
+| submission | retain an immutable run snapshot with structured source version/build identity and exact captured inputs | remains available to history independently of later Library edits |
 | run knowledge | retain advancing sent bounds and applied commands separately from the immutable submission payload | monotonic identity-checked transaction |
 | retiring pending entry | retry unfinished submission archival or recovery-record removal in the same pending map | all required storage operations complete |
 
@@ -750,7 +733,7 @@ progress through the same owner.
 | `preview/session.ts` | time intent, run pin and signal selection → one resolved `PreviewFrame` |
 | `preview/scene.ts` | resolved frame → map `Scene` |
 | `preview/signals.ts`, `effective.ts`, `query.ts` | shared latest-query owner for frame source and sampled epoch, plus satellite/signal → identified modeled readings |
-| `page/shared/preview/use-preview-view.ts` | session bookmarks and map cameras ↔ navigation's generic view memory |
+| `page/shared/preview/use-preview-view.ts` | session bookmarks ↔ navigation's generic view memory |
 
 `useGeometryPreview` sends coordinates and geometry to Pharos, cancels
 superseded requests and accepts only matching input results. The visible
@@ -966,7 +949,9 @@ success, failure and cancellation also use Events and Problems.
 `workbench/feedback/sources/` projects current document, Library file, host
 and basemap conditions. A mounted view can also own a projection. The
 underlying source retains the condition and recovery operation; feedback
-stores its shared representation.
+stores its shared representation. Document changes refresh their problems;
+catalogue notifications trigger another scan only when catalogue loading or
+error state changes.
 
 | Interface or state | Ownership rule |
 |---|---|

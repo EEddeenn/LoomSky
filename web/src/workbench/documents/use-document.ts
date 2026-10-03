@@ -27,10 +27,10 @@ function useDocument<T extends ObservableDocument>(id: string | null, open: (id:
   return result;
 }
 export function useScenarioDocument(id: string | null): DocumentResult<ScenarioDoc> {
-  return useDocument(id, openScenario, useStore(scenarioCatalog, (state) => id !== null && state.entries.get(id)?.head.archivedAt === null));
+  return useDocument(id, openScenario, useStore(scenarioCatalog, (state) => id !== null && state.entries.has(id)));
 }
 export function useTrajectoryDocument(id: string | null): DocumentResult<TrajectoryDoc> {
-  return useDocument(id, openTrajectory, useStore(trajectoryCatalog, (state) => id !== null && state.entries.get(id)?.head.archivedAt === null));
+  return useDocument(id, openTrajectory, useStore(trajectoryCatalog, (state) => id !== null && state.entries.has(id)));
 }
 export function useDocumentView(doc: ScenarioDoc | TrajectoryDoc | null, active = true): void {
   useEffect(() => active && doc !== null ? doc.attachView() : undefined, [doc, active]);

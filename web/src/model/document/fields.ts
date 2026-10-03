@@ -5,7 +5,7 @@ function identity(value: unknown): string | null {
   return typeof value.id === "string" && value.id !== "" ? value.id : null;
 }
 
-export function fieldReference(doc: TextDocument, path: readonly (string | number)[]): FieldReference {
+export function fieldReference(doc: Pick<TextDocument, "value">, path: readonly (string | number)[]): FieldReference {
   for (let index = 0; index < path.length; index++) {
     if (typeof path[index] !== "number") continue;
     const id = identity(doc.value(path.slice(0, index + 1)));
@@ -14,7 +14,7 @@ export function fieldReference(doc: TextDocument, path: readonly (string | numbe
   return { kind: "path", path: [...path] };
 }
 
-export function resolveField(doc: TextDocument, ref: FieldReference): (string | number)[] | null {
+export function resolveField(doc: Pick<TextDocument, "value">, ref: FieldReference): (string | number)[] | null {
   if (ref.kind === "path") return [...ref.path];
   const values = doc.value(ref.collection);
   if (!Array.isArray(values)) return null;

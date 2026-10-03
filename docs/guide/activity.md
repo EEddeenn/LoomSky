@@ -99,9 +99,9 @@ Closing a message or resolving a problem leaves its event history available.
 
 ## Confirm an action
 
-Archiving, removing or replacing resource content can open a confirmation
+Deleting, removing or replacing resource content can open a confirmation
 card with a target, explanation and relevant details. Read those details
-before using its named action button, such as **Archive scenario** or
+before using its named action button, such as **Delete scenario** or
 **Remove from Library**. Transmission has its own
 [review step](transmission.md#review-and-transmit) in the transmission dialog.
 

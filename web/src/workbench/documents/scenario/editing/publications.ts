@@ -6,7 +6,7 @@ import { gpsOfTime, timeOf, type TimeType } from "@/model/gnss";
 import type { Path } from "@/model/schema";
 import { inavServiceChanges, timeChanges, type PublicationRules } from "@/model/scenario";
 import type { ScenarioDoc } from "@/workbench/documents/scenario";
-import { discardDraftsAt, editDocument } from "../../editing";
+import { editDocument } from "../../editing";
 
 type PublicationFamily = "gps" | "inav" | "d2";
 export const publicationPaths: Record<PublicationFamily, Path> = { gps: ["messages", "gps"], inav: ["messages", "galileo", "inav"], d2: ["messages", "bds", "d2"] };
@@ -103,7 +103,6 @@ export function removePublication(doc: ScenarioDoc, family: PublicationFamily, s
     const path = publicationPaths[family];
     if (Array.isArray(doc.editor.value(path))) doc.editor.write([...path, selected], undefined);
     else doc.editor.write(path, undefined);
-    discardDraftsAt(doc.editor, path);
     selectPublication(doc, family, Math.max(0, selected - 1));
   });
 }

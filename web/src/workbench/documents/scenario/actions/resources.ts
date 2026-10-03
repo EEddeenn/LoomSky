@@ -1,16 +1,16 @@
-import { openScenario, archiveScenario, newScenario, type ScenarioDoc, type NewScenario } from "@/workbench/documents/scenario";
-import { captureAttention, hasAttention, type AttentionToken } from "@/workbench/navigation";
+import { openScenario, deleteScenario, newScenario, type ScenarioDoc, type NewScenario } from "@/workbench/documents/scenario";
+import { captureAttention, hasAttention, revealDocument, type AttentionToken } from "@/workbench/navigation";
 import { reportProblem, resolveProblem } from "@/workbench/feedback";
 import { startDuplicate, startExport } from "@/workbench/operations";
 import { scenarioPreviewSession } from "@/workbench/preview";
-import { captureOperation, confirmArchive, openCreated } from "../../operations";
+import { captureOperation, confirmDelete, openCreated } from "../../operations";
 import { chooseScenarioTrajectory } from "./bindings";
 
 export async function createScenario(input: NewScenario): Promise<boolean> {
   const attention = captureAttention();
   try {
     const doc = await newScenario(input);
-    openCreated(attention, { workspace: "resource", kind: "scenario", id: doc.id, tab: "setup" });
+    if (hasAttention(attention)) revealDocument({ kind: "scenario", id: doc.id, target: { kind: "path", path: ["name"] } });
     resolveProblem("scenario-library:create");
     return true;
   } catch (error) {
@@ -31,7 +31,7 @@ export async function copyScenario(doc: ScenarioDoc, attention: AttentionToken =
   return true;
 }
 export async function removeScenario(doc: ScenarioDoc): Promise<boolean> {
-  return confirmArchive(doc, archiveScenario, "Saved versions and submitted runs remain available.");
+  return confirmDelete(doc, deleteScenario);
 }
 export async function downloadScenario(doc: ScenarioDoc, attention: AttentionToken = captureAttention()): Promise<boolean> {
   const input = captureOperation(doc, "export", attention);

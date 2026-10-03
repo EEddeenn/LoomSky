@@ -79,7 +79,7 @@ runtime trajectory to a scenario.
 
 Open the imported scenario.
 
-1. In **Setup**, choose **Choose from Library…** under Trajectory.
+1. In **Setup**, choose **Choose…** under Trajectory.
    Select `wuhan_north`, choose saved **v1**, inspect its verified result
    and choose **Use v1**. The setup section shows the selected saved version.
 2. In **Data**, find the referenced `brdm_2026232.rnx` file and

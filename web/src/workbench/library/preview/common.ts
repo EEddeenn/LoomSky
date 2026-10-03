@@ -53,7 +53,6 @@ export function useSavedPreview(head: ResourceHead | undefined) {
 export function workingText({ working }: DocumentCatalogEntry): string {
   const state = working?.saveState;
   return state?.status === "saving" ? "Saving…"
-    : state?.status === "conflict" ? "Saved version changed"
     : state?.status === "error" ? "Save failed"
     : working !== null && (working.dirty || working.pending) ? "Unsaved changes"
     : "Saved locally";

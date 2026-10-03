@@ -1,6 +1,6 @@
 import type { ResourceRef } from "@/model/resource";
 import type { LibraryFileKind } from "@/model/library";
-import type { ResourceKind, SavedVersion, SavedVersionOf } from "@/model/version";
+import type { ResourceKind, SavedVersion } from "@/model/version";
 import type { SavedScenarioBuild } from "@/workbench/documents/scenario/builds";
 import type { SavedTrajectoryBuild } from "@/workbench/documents/trajectory/builds";
 import type { VersionHistoryReader } from "@/workbench/documents/versions";
@@ -29,14 +29,6 @@ export type SavedVersionPickerOptions = {
     onUse: (candidate: SavedVersionCandidate<Kind>) => boolean | void | Promise<boolean | void>;
   }
 }[ResourceKind];
-type ReadyVersionSelection = {
-  [Kind in ResourceKind]: { kind: "saved"; version: SavedVersionOf<Kind>; status: "ready"; candidate: SavedVersionCandidate<Kind> }
-}[ResourceKind];
-export type VersionSelection =
-  | { kind: "working" }
-  | { kind: "saved"; version: SavedVersion; status: "loading" }
-  | ReadyVersionSelection
-  | { kind: "saved"; version: SavedVersion; status: "error"; message: string; retry: boolean };
 type PickerSession = {
   id: number;
   owner: PageSession;
@@ -59,6 +51,6 @@ export type SavedVersionPickerSession = PickerSession & {
   options: SavedVersionPickerOptions;
   resourceId: string | null;
   history: VersionHistoryReader | null;
-  selection: VersionSelection | null;
+  selection: SavedVersion | null;
 };
 export type LibraryPickerSession = ResourcePickerSession | SavedVersionPickerSession;

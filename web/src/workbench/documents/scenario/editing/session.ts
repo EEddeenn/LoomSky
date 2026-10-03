@@ -1,17 +1,18 @@
-import { createStore } from "@/core";
-import { pathKey, type TextDocument } from "@/model/document";
-import type { Path } from "@/model/schema";
+import { createStore, recordOf } from "@/core";
+import { fieldReference, isJsonNumberLiteral, pathKey, type Prepared, type TextDocument, type WriteChange } from "@/model/document";
+import { lookup, type Path } from "@/model/schema";
+import { schemas } from "@/workbench/schemas";
 import { EditingSession } from "../../editing";
-import type { EditingCheckpoint } from "../../editing/session";
 
 export type TableState = { selected: Set<number>; batch: string; paste: string; qualityColumn: "" | "rurai" | "udrei"; conflict: string | null };
 type TableBaseline = { path: Path; value: string | undefined; lists: { path: Path; value: string }[] };
 type TablePatch = Partial<Pick<TableState, "selected" | "batch" | "paste" | "qualityColumn">>;
-export type ScenarioEditingCheckpoint = EditingCheckpoint & Readonly<{
-  tables: Readonly<Record<string, Omit<TableState, "selected"> & { selected: readonly number[] }>>;
-  baselines: readonly (readonly [string, Omit<TableBaseline, "value"> & { value: string | null }])[];
-  collections: Readonly<Record<string, number>>;
-}>;
+
+export function integerInRange(raw: string, min?: number, max?: number): boolean {
+  const value = Number(raw);
+  return isJsonNumberLiteral(raw) && Number.isSafeInteger(value)
+    && (min === undefined || value >= min) && (max === undefined || value <= max);
+}
 
 export class ScenarioSession extends EditingSession {
   readonly tables = createStore<{ entries: Readonly<Record<string, TableState>> }>({ entries: {} });
@@ -22,26 +23,6 @@ export class ScenarioSession extends EditingSession {
 
   constructor(doc: TextDocument) { super(doc); this.source = doc; }
 
-  override checkpoint(): ScenarioEditingCheckpoint {
-    if (this.applyingTables.size > 0) throw new Error("Finish applying table input before saving.");
-    return structuredClone({
-      ...super.checkpoint(),
-      tables: Object.fromEntries(Object.entries(this.tables.get().entries).map(([key, table]) => [key, { ...table, selected: [...table.selected] }])),
-      baselines: [...this.baselines].map(([key, baseline]) => [key, { ...baseline, value: baseline.value ?? null }] as const),
-      collections: this.collections.get().selected,
-    });
-  }
-
-  override restoreCheckpoint(checkpoint: ScenarioEditingCheckpoint): void {
-    const saved = structuredClone(checkpoint);
-    this.applyingTables.clear();
-    this.baselines.clear();
-    for (const [key, baseline] of saved.baselines) this.baselines.set(key, { ...baseline, value: baseline.value ?? undefined });
-    this.tables.set({ entries: Object.fromEntries(Object.entries(saved.tables).map(([key, table]) => [key, { ...table, selected: new Set(table.selected) }])) });
-    this.collections.set({ selected: saved.collections });
-    super.restoreCheckpoint(saved);
-  }
-
   override get unapplied(): boolean {
     return Object.values(this.tables.get().entries).some((table) => table.batch !== "" || table.paste !== "");
   }
@@ -49,7 +30,7 @@ export class ScenarioSession extends EditingSession {
   setTable(path: Path, patch: TablePatch): void {
     const key = pathKey("scenario", path);
     const before = this.tables.get().entries[key] ?? { selected: new Set<number>(), batch: "", paste: "", qualityColumn: "", conflict: null };
-    const table = { ...before, ...patch };
+    const table = { ...before, ...patch, conflict: null };
     const contentChanged = table.batch !== before.batch || table.paste !== before.paste;
     if (!contentChanged && table.selected === before.selected && table.qualityColumn === before.qualityColumn) return;
     if (table.batch === "" && table.paste === "") {
@@ -83,7 +64,7 @@ export class ScenarioSession extends EditingSession {
   tableConflict(path: Path): string | null {
     const key = pathKey("scenario", path);
     const table = this.tables.get().entries[key];
-    if (table === undefined || table.conflict !== null) return table?.conflict ?? null;
+    if (table === undefined) return null;
     const baseline = this.baselines.get(key);
     const conflict = baseline === undefined ? null : this.conflict(baseline);
     if (conflict !== null) {
@@ -93,15 +74,79 @@ export class ScenarioSession extends EditingSession {
     return conflict;
   }
 
-  applyTableInput(path: Path, input: "batch" | "paste", operation: () => boolean): boolean {
+  private inputIssue(path: Path, message: string): Extract<Prepared<never>, { ok: false }> {
     const key = pathKey("scenario", path);
     const table = this.tables.get().entries[key];
-    if (table === undefined || table[input] === "" || this.applyingTables.has(key) || this.tableConflict(path) !== null) return false;
+    if (table !== undefined && table.conflict !== message) {
+      this.tables.set((state) => ({ entries: { ...state.entries, [key]: { ...table, conflict: message } } }));
+      this.changed();
+    }
+    return { ok: false, issue: { kind: "field", issue: { ref: fieldReference(this.source, path), path, message } } };
+  }
+
+  private prepareTableInput(path: Path, input: "batch" | "paste"): Prepared<readonly WriteChange[]> {
+    const key = pathKey("scenario", path);
+    const table = this.tables.get().entries[key];
+    if (table === undefined || table[input] === "") return { ok: true, value: [] };
+    const conflict = this.tableConflict(path);
+    if (conflict !== null) return this.inputIssue(path, conflict);
+    const raw = this.source.value(path);
+    const rows = Array.isArray(raw) ? raw : recordOf(raw) === undefined ? [] : [raw];
+    const selected = [...table.selected].filter((index) => index >= 0 && index < rows.length).sort((a, b) => a - b);
+    const indices = input === "paste" && selected.length === 0 ? rows.map((_, index) => index) : selected;
+    if (indices.length === 0) return this.inputIssue(path, "Select the rows to update.");
+    const quality = rows.some((row) => recordOf(row) !== undefined);
+    const column = quality ? table.qualityColumn : undefined;
+    if (column === "") return this.inputIssue(path, "Choose a quality index to update.");
+    const itemPath = [...path, ...(Array.isArray(raw) ? [indices[0]!] : []), ...(column === undefined ? [] : [column])];
+    const meta = lookup(schemas.get().scenario, itemPath, (at) => this.source.value(at));
+    const tokens = input === "paste" ? table.paste.trim().split(/[\s,]+/).filter(Boolean) : [table.batch.trim()];
+    const values = column === undefined ? tokens : tokens.map((text) => /^\d+$/.test(text) ? String(Number(text)) : "");
+    if (input === "paste" && values.length !== indices.length) return this.inputIssue(path, `Paste ${indices.length} values in row order.`);
+    if (values.some((value) => !integerInRange(value, meta?.minimum, meta?.maximum))) return this.inputIssue(path,
+      `Use a whole number${meta?.minimum === undefined ? "" : ` from ${meta.minimum}`}${meta?.maximum === undefined ? "" : meta.minimum === undefined ? ` up to ${meta.maximum}` : ` to ${meta.maximum}`}.`);
+    return { ok: true, value: indices.map((index, position) => ({
+      path: [...path, ...(Array.isArray(raw) ? [index] : []), ...(column === undefined ? [] : [column])],
+      number: values[input === "batch" ? 0 : position]!,
+    })) };
+  }
+
+  prepareTables(fieldChanges: readonly WriteChange[] = []): Prepared<readonly WriteChange[]> {
+    const changes: WriteChange[] = [];
+    const valueOf = (change: WriteChange) => change.number !== undefined ? Number(change.number)
+      : change.json !== undefined ? JSON.parse(change.json) : change.value;
+    for (const { path } of this.baselines.values()) {
+      for (const input of ["batch", "paste"] as const) {
+        const prepared = this.prepareTableInput(path, input);
+        if (!prepared.ok) return prepared;
+        for (const change of prepared.value) {
+          if ([...fieldChanges, ...changes].some((other) => {
+            const overlap = other.path.every((part, index) => part === change.path[index]) || change.path.every((part, index) => part === other.path[index]);
+            return overlap && (other.path.length !== change.path.length || JSON.stringify(valueOf(other)) !== JSON.stringify(valueOf(change)));
+          })) return this.inputIssue(path, "This table has different pending values for the same row. Clear one of those inputs before saving.");
+        }
+        changes.push(...prepared.value);
+      }
+    }
+    return { ok: true, value: changes };
+  }
+
+  clearTableInputs(): void {
+    for (const { path } of [...this.baselines.values()]) this.discardTableInputs(path);
+  }
+
+  applyTableInput(path: Path, input: "batch" | "paste"): Prepared<void> {
+    if (!this.source.writable()) return this.inputIssue(path, "This scenario is no longer editable.");
+    const prepared = this.prepareTableInput(path, input);
+    if (!prepared.ok) return prepared;
+    const key = pathKey("scenario", path);
     this.applyingTables.add(key);
     try {
-      const applied = operation();
-      if (applied) this.setTable(path, { [input]: "" });
-      return applied;
+      this.source.writeMany(prepared.value);
+      this.setTable(path, { [input]: "" });
+      return { ok: true, value: undefined };
+    } catch (error) {
+      return this.inputIssue(path, error instanceof Error ? error.message : String(error));
     } finally {
       this.applyingTables.delete(key);
       this.reconcile();

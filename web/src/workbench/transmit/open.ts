@@ -53,7 +53,7 @@ export async function openTransmit({ scenario, host, save = false, replayFromMs 
         kind: "scenario",
         parent: owner,
         onClose: () => finishOpening(owner),
-        selected: head === undefined || head.archivedAt !== null ? undefined : { resourceId: head.id, versionId: head.headVersionId },
+        selected: head === undefined ? undefined : { resourceId: head.id, versionId: head.headVersionId },
         onUse(candidate) {
           if (!current()) return false;
           installTransmission(owner, candidate.build, selectedHost, 0);
@@ -62,7 +62,6 @@ export async function openTransmit({ scenario, host, save = false, replayFromMs 
       choosing = true;
       return;
     }
-    if (head !== undefined && head.archivedAt !== null) throw new Error("Scenario archived. Choose an active scenario in the Library.");
     let savedVersionId = head?.headVersionId;
     if (save) {
       if (scenarioId === null) return;

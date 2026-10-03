@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --display: #ffffff;
+  --panel: #f0f0f0;
+  --face: #ffffff;
+  --hover: #e8e8e8;
+  --inset: #e8e8e8;
+  --line: #d6d6d6;
+  --line2: #bdbdbd;
+  --field: #878787;
+  --ink: #141414;
+  --ink2: #474747;
+  --ink3: #666666;
+  --ink4: #a3a3a3;
+  --grid: #e0e0e0;
+  --sel: #141414;
+  --on-sel: #ffffff;
+  --focus: #141414;
+  --primary-bg: #141414;
+  --primary-hover: #383838;
+  --primary-ink: #ffffff;
+  --primary-ring: 0 0 #0000;
+  --rf: #c8251b;
+  --rf-mark: #c8251b;
+  --rf-deep: #a81e15;
+  --on-rf: #ffffff;
+  --rf-ink: #b3201a;
+  --rf-line: rgba(255, 255, 255, 0.42);
+  --halo: rgba(200, 37, 27, 0.24);
+  --warn: #b87800;
+  --warn-ink: #8a5700;
+  --fault: #a8147e;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.14);
+  --scrim: rgba(20, 20, 20, 0.28);
+  --map-land: #e9e9e9;
+  --route: #474747;
+  --route-case: #ffffff;
+  --aired: #141414;
+  --segband: rgba(20, 20, 20, 0.14);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --display: #111111;
+  --panel: #1a1a1a;
+  --face: #232323;
+  --hover: #2e2e2e;
+  --inset: #2b2b2b;
+  --line: #363636;
+  --line2: #4a4a4a;
+  --field: #7c7c7c;
+  --ink: #e4e4e4;
+  --ink2: #adadad;
+  --ink3: #999999;
+  --ink4: #5c5c5c;
+  --grid: #262626;
+  --sel: #d6d6d6;
+  --on-sel: #141414;
+  --focus: #e4e4e4;
+  --primary-bg: #232323;
+  --primary-hover: #2e2e2e;
+  --primary-ink: #e4e4e4;
+  --primary-ring: inset 0 0 0 1.5px #e4e4e4;
+  --rf: #c8251b;
+  --rf-mark: #e5463a;
+  --rf-deep: #b0211a;
+  --on-rf: #ffffff;
+  --rf-ink: #ff7466;
+  --rf-line: rgba(255, 255, 255, 0.38);
+  --halo: rgba(200, 37, 27, 0.4);
+  --warn: #d99a3a;
+  --warn-ink: #e0a340;
+  --fault: #e36fc6;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px rgba(0, 0, 0, 0.6);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --map-land: #171717;
+  --route: #9c9c9c;
+  --route-case: #0f0f0f;
+  --aired: #e4e4e4;
+  --segband: rgba(228, 228, 228, 0.16);
+}
+
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --text-d1: 28px;
+  --text-d1--line-height: 32px;
+  --text-d2: 20px;
+  --text-d2--line-height: 24px;
+  --text-title: 16px;
+  --text-title--line-height: 24px;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-small: 12px;
+  --text-small--line-height: 16px;
+  --text-label: 11px;
+  --text-label--line-height: 16px;
+  --text-micro: 11px;
+  --text-micro--line-height: 12px;
+  --text-tiny: 10px;
+  --text-tiny--line-height: 12px;
+  --radius-key: 2px;
+  --radius-layer: 4px;
+}
+
+@theme inline {
+  --color-display: var(--display);
+  --color-panel: var(--panel);
+  --color-face: var(--face);
+  --color-hover: var(--hover);
+  --color-inset: var(--inset);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-field: var(--field);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-ink3: var(--ink3);
+  --color-ink4: var(--ink4);
+  --color-sel: var(--sel);
+  --color-on-sel: var(--on-sel);
+  --color-primary: var(--primary-bg);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--primary-ink);
+  --color-rf: var(--rf);
+  --color-rf-mark: var(--rf-mark);
+  --color-rf-deep: var(--rf-deep);
+  --color-on-rf: var(--on-rf);
+  --color-rf-ink: var(--rf-ink);
+  --color-warn: var(--warn);
+  --color-warn-ink: var(--warn-ink);
+  --color-fault: var(--fault);
+  --color-scrim: var(--scrim);
+  --color-land: var(--map-land);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-cond: var(--font-plex-cond), var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --shadow-float: var(--shadow);
+}
+
+@utility lab {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@utility fn {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+@utility vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@utility hatch {
+  background: repeating-linear-gradient(135deg, var(--rf-mark) 0 1.5px, transparent 1.5px 4px);
+}
+
+@utility ring-key {
+  box-shadow: inset 0 0 0 1px var(--line2);
+}
+
+@utility ring-field {
+  box-shadow: inset 0 0 0 1px var(--field);
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--panel);
+    color: var(--ink);
+    font: 400 13px/20px var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  code,
+  kbd,
+  pre {
+    font-family: var(--font-mono);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--ink3);
+    font-family: var(--font-sans);
+  }
+}

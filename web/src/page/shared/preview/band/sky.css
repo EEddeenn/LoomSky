@@ -1,0 +1,96 @@
+@layer components {
+  .sky .ring0 {
+    fill: var(--display);
+    stroke: var(--ink3);
+    stroke-width: 1;
+  }
+  .sky .ring {
+    fill: none;
+    stroke: var(--line2);
+    stroke-width: 0.8;
+  }
+  .sky .tk {
+    stroke: var(--ink3);
+    stroke-width: 1;
+  }
+  .sky .tk.mi {
+    stroke: var(--ink4);
+    stroke-width: 0.8;
+  }
+  .sky .maskring {
+    fill: none;
+    stroke: var(--ink2);
+    stroke-width: 1;
+    stroke-dasharray: 3 2;
+  }
+  .sky .ax {
+    font: 600 10px/1 var(--font-cond);
+    letter-spacing: 0.06em;
+    fill: var(--ink2);
+  }
+  .sky .sv {
+    font: 500 9px/1 var(--font-mono);
+    fill: var(--ink);
+    paint-order: stroke;
+    stroke: var(--display);
+    stroke-width: 2px;
+    stroke-linejoin: round;
+    pointer-events: none;
+    visibility: hidden;
+  }
+  .sky .sv.keep,
+  .sky .sv.hl {
+    visibility: visible;
+  }
+  .sky circle.hl {
+    stroke: var(--ink);
+    stroke-width: 2.5;
+  }
+  .sky .on {
+    fill: var(--ink);
+    stroke: var(--display);
+    stroke-width: 1.2;
+  }
+  .sky .up {
+    fill: var(--display);
+    stroke: var(--ink);
+    stroke-width: 1.4;
+  }
+  .sky .dn {
+    fill: none;
+    stroke: var(--ink4);
+    stroke-width: 1;
+    stroke-dasharray: 1.6 1.4;
+  }
+  .sky .cmd {
+    fill: var(--ink);
+    stroke: var(--display);
+    stroke-width: 1.2;
+  }
+  .sky .cmdr {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1;
+  }
+  .sky .pick {
+    cursor: pointer;
+  }
+  .sky .pick:hover {
+    stroke: var(--ink);
+    stroke-width: 2.5;
+  }
+  .sky.stale .on,
+  .sky.stale .cmd {
+    fill: var(--display);
+    stroke: var(--ink);
+    stroke-width: 1.3;
+    stroke-dasharray: 2 1.4;
+  }
+  .sky.stale .cmdr {
+    stroke-dasharray: 2 1.4;
+  }
+  .sky.frozen .on,
+  .sky.frozen .cmd {
+    fill: var(--ink3);
+  }
+}

@@ -1,0 +1,255 @@
+@layer components {
+  .tr-ghost {
+    fill: none;
+    stroke: var(--ink3);
+    stroke-width: 3;
+    stroke-dasharray: 5 4;
+    stroke-linejoin: round;
+    opacity: 0.45;
+  }
+  .ma-path {
+    fill: none;
+    stroke: var(--route);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+  .ma-connector {
+    stroke: var(--ink3);
+    stroke-dasharray: 3 3;
+    stroke-width: 1;
+  }
+  .ma-guide {
+    stroke: var(--ink2);
+    stroke-dasharray: 7 3;
+    stroke-width: 2;
+  }
+  .ma-region {
+    fill: color-mix(in srgb, var(--sel) 10%, transparent);
+    stroke: var(--sel);
+    stroke-dasharray: 4 3;
+    stroke-width: 1.5;
+  }
+  .ma-guide.is-selected,
+  .ma-region.is-selected {
+    stroke: var(--sel);
+    stroke-width: 3;
+  }
+  .ma-selection {
+    stroke: var(--segband);
+    stroke-width: 16;
+  }
+  .ma-path-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 18;
+    pointer-events: stroke;
+    cursor: pointer;
+  }
+  .ma-path-hit:focus-visible {
+    outline: none;
+    stroke: var(--segband);
+  }
+  .ma-area-hit {
+    fill: transparent;
+    pointer-events: all;
+  }
+  .ma-handle {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: auto;
+    touch-action: none;
+    cursor: grab;
+  }
+  .ma-handle:active {
+    cursor: grabbing;
+  }
+  .ma-dot {
+    display: grid;
+    place-items: center;
+    width: 13px;
+    height: 13px;
+    background: var(--face);
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+    font: 600 10px/1 var(--font-sans);
+    color: var(--ink);
+  }
+  .ma-kind-handle .ma-dot {
+    width: 9px;
+    height: 9px;
+    border-width: 1.5px;
+  }
+  .ma-kind-end .ma-dot {
+    border-radius: 2px;
+  }
+  .ma-handle.is-selected .ma-dot {
+    background: var(--sel);
+    color: var(--on-sel);
+  }
+  .ma-handle.is-selected .ma-dot,
+  .ma-handle:hover .ma-dot,
+  .ma-handle:focus-visible .ma-dot {
+    box-shadow: 0 0 0 4px var(--segband);
+  }
+  .ma-handle:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+  }
+  .ma-lock {
+    position: absolute;
+    top: 27px;
+    padding: 4px 7px;
+    border-radius: var(--radius-key);
+    background: var(--face);
+    box-shadow: 0 0 0 1px var(--line2);
+    color: var(--ink2);
+    font: 500 11px/1.4 var(--font-sans);
+    width: max-content;
+    max-width: 260px;
+    text-align: left;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .ma-handle:hover .ma-lock,
+  .ma-handle:focus .ma-lock {
+    opacity: 1;
+  }
+
+  .tr-case {
+    fill: none;
+    stroke: var(--route-case);
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .tr-plan {
+    fill: none;
+    stroke: var(--route);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .tr-aired {
+    fill: none;
+    stroke: var(--aired);
+    stroke-width: 4;
+    stroke-linejoin: round;
+  }
+  .tr-tick {
+    fill: none;
+    stroke: var(--route);
+    stroke-width: 1.2;
+  }
+  .tr-tick.mj {
+    stroke-width: 1.6;
+  }
+  .mk-start {
+    fill: var(--face);
+    stroke: var(--ink);
+    stroke-width: 2;
+  }
+  .mk-end {
+    fill: var(--ink);
+    stroke: var(--face);
+    stroke-width: 1.5;
+  }
+  .mk-lbl {
+    font: 600 12px/1 var(--font-sans);
+    fill: var(--ink);
+  }
+  .mk-pill {
+    fill: var(--face);
+    stroke: var(--line2);
+    stroke-width: 1;
+  }
+  .mk-onair .mk-pill {
+    fill: var(--rf);
+    stroke: none;
+  }
+  .mk-onair .mk-lbl {
+    fill: var(--on-rf);
+  }
+  .mk .dot {
+    fill: var(--ink);
+    stroke: var(--face);
+    stroke-width: 2.5;
+  }
+  .mk-onair .halo {
+    fill: var(--halo);
+    animation: halo 1.6s ease-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .mk .wedge {
+    fill: var(--ink);
+    stroke: var(--face);
+    stroke-width: 1.5;
+  }
+  .mk-onair .dot,
+  .mk-onair .wedge {
+    fill: var(--rf);
+  }
+  .mk-armed .wedge,
+  .mk-unknown .wedge,
+  .mk-armed .dot,
+  .mk-unknown .dot {
+    fill: var(--face);
+    stroke: var(--rf-mark);
+  }
+  .mk-unknown .wedge {
+    stroke-dasharray: 2 2;
+  }
+  .mk-armed .mk-pill {
+    fill: var(--face);
+    stroke: var(--rf-mark);
+    stroke-width: 2;
+  }
+  .mk-unknown .mk-pill {
+    stroke: var(--rf-mark);
+    stroke-dasharray: 3 2;
+    stroke-width: 1.5;
+  }
+  .mk-alarm .mk-pill {
+    stroke: var(--fault);
+    stroke-width: 1.5;
+  }
+  .mk-armed .dot {
+    stroke-width: 3;
+  }
+  .mk-unknown .dot {
+    stroke-dasharray: 3.2 2.4;
+  }
+  .mk-alarm .dot {
+    stroke: var(--fault);
+    stroke-width: 3;
+  }
+  .mk-ghost .dot {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1.5;
+    stroke-dasharray: 3 2;
+  }
+}
+
+@keyframes halo {
+  0% {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-onair .halo {
+    animation: none;
+    transition: none;
+  }
+}

@@ -1,0 +1,16 @@
+@layer components {
+  .meter {
+    background:
+      repeating-linear-gradient(90deg, var(--grid) 0 2px, transparent 2px 4px) 24px 32px / 100% 1px no-repeat,
+      repeating-linear-gradient(90deg, var(--grid) 0 2px, transparent 2px 4px) 24px 48px / 100% 1px no-repeat,
+      repeating-linear-gradient(90deg, var(--grid) 0 2px, transparent 2px 4px) 24px 64px / 100% 1px no-repeat,
+      linear-gradient(var(--ink4), var(--ink4)) 24px 72px / 100% 1px no-repeat;
+  }
+  .meter.spacious {
+    background:
+      repeating-linear-gradient(90deg, var(--grid) 0 2px, transparent 2px 4px) 24px 48px / 100% 1px no-repeat,
+      repeating-linear-gradient(90deg, var(--grid) 0 2px, transparent 2px 4px) 24px 96px / 100% 1px no-repeat,
+      repeating-linear-gradient(90deg, var(--grid) 0 2px, transparent 2px 4px) 24px 144px / 100% 1px no-repeat,
+      linear-gradient(var(--ink4), var(--ink4)) 24px 168px / 100% 1px no-repeat;
+  }
+}

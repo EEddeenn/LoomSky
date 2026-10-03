@@ -1,0 +1,19 @@
+.{
+    .name = .loomsky,
+    .version = "1.0.0",
+    .fingerprint = 0x39126dfcc22b144,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .pharos = .{
+            .url = "git+https://github.com/Mirai-Research/Pharos.git#fa43e9dfb34ca728ca5d21dadb9d5e8e9bb34c8c",
+            .hash = "Pharos-1.0.0-bOOt6WPtkwCL1i4BVeIt7X_inaToz_x59yot0Xm0xT5R",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "docs",
+        "README.md",
+    },
+}

@@ -1,0 +1,2 @@
+export type { AppendSavedVersion, AppendedSavedVersion, BuildFailureReason, BuildRecord, FailedBuild, ResourceHead, ResourceKind, ResourceSummary, ResourceSummaryTrajectory, SavedResource, SavedVersion, SavedVersionOf, ScenarioSavedVersion, ScenarioSnapshot, SuccessfulBuildOf, SuccessfulTrajectoryBuild, TrajectorySavedVersion, TrajectorySnapshot } from "./version/types";
+export { canonicalContent, freezeContent, immutableCopy, resourceSummary, savedSnapshotDigest, savedVersionName } from "./version/content";

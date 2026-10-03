@@ -3,9 +3,7 @@
   "main": "web/worker.ts",
   "compatibility_date": "2026-10-03",
   "workers_dev": false,
-  "routes": [
-    { "pattern": "loomsky.panel.mirairesearch.com", "custom_domain": true }
-  ],
+  // The existing custom domain is managed in the Cloudflare dashboard.
   "services": [
     { "binding": "LOGIN", "service": "login" }
   ],

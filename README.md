@@ -67,7 +67,8 @@ out the Pharos commit pinned in `build.zig.zon`, builds only Zig's `web` step
 Wrangler. The TypeScript Worker in `web/worker.ts` checks Login before
 serving HTML, JavaScript, WASM, schemas, or any other asset. It uses
 `loomsky.panel.mirairesearch.com` and preserves the page routes in
-`web/serve.ts`.
+`web/serve.ts`. The custom domain is managed in the Cloudflare dashboard;
+`wrangler.jsonc` intentionally omits `routes` so CI deploys do not change it.
 
 Before the first workflow run, create a Worker named `loomsky` in the same
 Cloudflare account as `login` and attach the exact custom domain
